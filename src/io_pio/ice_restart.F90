@@ -1,4 +1,3 @@
-
 !  SVN:$Id: ice_restart.F90 607 2013-03-29 15:49:42Z eclare $
 !=======================================================================
 !
@@ -609,8 +608,9 @@
 ! author David A Bailey, NCAR
 
       subroutine define_rest_field(File, vname, dims)
+      use ice_constants, only: c0
 
-      type(file_desc_t)      , intent(in)  :: File
+      type(file_desc_t)      , intent(inout)  :: File
       character (len=*)      , intent(in)  :: vname
       integer (kind=int_kind), intent(in)  :: dims(:)
 
@@ -618,7 +618,7 @@
         status        ! status variable from netCDF routine
 
       status = pio_def_var(File,trim(vname),pio_double,dims,vardesc)
-
+      status = pio_put_att(File, vardesc, '_FillValue', c0)
       end subroutine define_rest_field
 
 !=======================================================================
