@@ -8,7 +8,7 @@
 !          William H. Lipscomb, LANL
 !
 ! 2006 ECH: moved exit timeLoop to prevent execution of unnecessary timestep
-! 2006 ECH: Streamlined for efficiency 
+! 2006 ECH: Streamlined for efficiency
 ! 2006 ECH: Converted to free source form (F90)
 ! 2007 BPB: Modified Delta-Eddington shortwave interface
 ! 2008 ECH: moved ESMF code to its own driver
@@ -35,7 +35,7 @@
 !         Philip W. Jones, LANL
 !         William H. Lipscomb, LANL
 
-      subroutine CICE_Run
+      subroutine CICE_Run(restart_filename)
 
       use ice_aerosol, only: faero_default
       use ice_algae, only: get_forcing_bgc
@@ -47,6 +47,8 @@
           timer_couple, timer_step
       use ice_zbgc_shared, only: skl_bgc
 
+      character(len=*), intent(in), optional :: restart_filename
+
    !--------------------------------------------------------------------
    !  initialize error code and step timer
    !--------------------------------------------------------------------
@@ -57,7 +59,7 @@
    ! timestep loop
    !--------------------------------------------------------------------
 
-!      timeLoop: do
+   !      timeLoop: do
 
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
@@ -66,23 +68,13 @@
          call init_flux_atm     ! initialize atmosphere fluxes sent to coupler
          call init_flux_ocn     ! initialize ocean fluxes sent to coupler
 
-#ifdef CESMCOUPLED
-#define coupled
-#endif
-
-#ifndef coupled
-         call ice_timer_start(timer_couple)  ! atm/ocn coupling
-         call get_forcing_atmo     ! atmospheric forcing from data
-         call get_forcing_ocn(dt)  ! ocean forcing from data
-         ! if (tr_aero) call faero_data       ! aerosols
-         if (tr_aero)  call faero_default     ! aerosols
-         if (skl_bgc)  call get_forcing_bgc   ! biogeochemistry
-         call ice_timer_stop(timer_couple)    ! atm/ocn coupling
-#endif
-
          call calendar(time)    ! at the end of the timestep
 
-         call ice_step
+         if (present(restart_filename)) then
+            call ice_step(restart_filename)
+         else
+            call ice_step()
+         end if
 
 !         if (stop_now >= 1) exit timeLoop
 
@@ -92,7 +84,7 @@
    ! end of timestep loop
    !--------------------------------------------------------------------
 
-      call ice_timer_stop(timer_step)   ! end timestepping loop timer     
+      call ice_timer_stop(timer_step)   ! end timestepping loop timer
 
       end subroutine CICE_Run
 
@@ -103,7 +95,7 @@
 !  author Elizabeth C. Hunke, LANL
 !         William H. Lipscomb, LANL
 
-      subroutine ice_step
+      subroutine ice_step(restart_filename)
 
       use ice_age, only: write_restart_age
       use ice_aerosol, only: write_restart_aero
@@ -140,8 +132,10 @@
       use ice_communicate, only: MPI_COMM_ICE
       use ice_prescribed_mod
 
+      character(len=*), intent(in), optional :: restart_filename
+
       integer (kind=int_kind) :: &
-         iblk        , & ! block index 
+         iblk        , & ! block index
          k               ! dynamics supercycling index
 
       !-----------------------------------------------------------------
@@ -182,7 +176,7 @@
       !-----------------------------------------------------------------
       ! thermodynamics
       !-----------------------------------------------------------------
-            
+
             call step_therm1     (dt, iblk) ! vertical thermodynamics
             call biogeochemistry (dt, iblk) ! biogeochemistry
             if (.not.prescribed_ice) &
@@ -253,7 +247,11 @@
 
          call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
-            call dumpfile     ! core variables for restarting
+            if (present(restart_filename)) then
+               call dumpfile(filename_spec=restart_filename)  ! core variables for restarting
+            else
+               call dumpfile()
+            end if
             if (tr_iage)      call write_restart_age
             if (tr_FY)        call write_restart_FY
             if (tr_lvl)       call write_restart_lvl
@@ -261,7 +259,7 @@
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
             if (tr_aero)      call write_restart_aero
-            if (skl_bgc)      call write_restart_bgc  
+            if (skl_bgc)      call write_restart_bgc
             if (tr_brine)     call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
             call final_restart
@@ -270,7 +268,7 @@
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       end subroutine ice_step
-    
+
 !=======================================================================
 !
 ! Prepare for coupling
@@ -301,18 +299,18 @@
       use ice_timers, only: timer_couple, ice_timer_start, ice_timer_stop
       use ice_zbgc_shared, only: flux_bio, flux_bio_ai
 
-      integer (kind=int_kind), intent(in) :: & 
-         iblk            ! block index 
+      integer (kind=int_kind), intent(in) :: &
+         iblk            ! block index
 
       ! local variables
 
-      integer (kind=int_kind) :: & 
+      integer (kind=int_kind) :: &
          n           , & ! thickness category index
          i,j         , & ! horizontal indices
          k               ! tracer index
 
       real (kind=dbl_kind) :: cszn ! counter for history averaging
- 
+
       real (kind=dbl_kind) :: netsw
 
       !-----------------------------------------------------------------
@@ -430,7 +428,7 @@
          enddo
 
       !-----------------------------------------------------------------
-      ! Divide fluxes by ice area 
+      ! Divide fluxes by ice area
       !  - the CCSM coupler assumes fluxes are per unit ice area
       !  - also needed for global budget in diagnostics
       !-----------------------------------------------------------------
@@ -451,21 +449,21 @@
                             alvdf    (:,:,iblk), alidf   (:,:,iblk), &
                             flux_bio(:,:,1:nbtrcr,iblk),             &
                             Uref=Uref(:,:,iblk), wind=wind(:,:,iblk) )
- 
+
 !echmod - comment this out for efficiency, if .not. calc_Tsfc
          if (.not. calc_Tsfc) then
 
        !---------------------------------------------------------------
-       ! If surface fluxes were provided, conserve these fluxes at ice 
-       ! free points by passing to ocean. 
+       ! If surface fluxes were provided, conserve these fluxes at ice
+       ! free points by passing to ocean.
        !---------------------------------------------------------------
 
-            call sfcflux_to_ocn & 
+            call sfcflux_to_ocn &
                          (nx_block,              ny_block,             &
                           tmask   (:,:,iblk),    aice_init(:,:,iblk),  &
                           fsurfn_f (:,:,:,iblk), flatn_f(:,:,:,iblk),  &
                           fresh    (:,:,iblk),   fhocn    (:,:,iblk))
-         endif                 
+         endif
 !echmod
 
          call ice_timer_stop(timer_couple,iblk)   ! atm/ocn coupling
@@ -475,10 +473,10 @@
 !=======================================================================
 !
 ! If surface heat fluxes are provided to CICE instead of CICE calculating
-! them internally (i.e. .not. calc_Tsfc), then these heat fluxes can 
+! them internally (i.e. .not. calc_Tsfc), then these heat fluxes can
 ! be provided at points which do not have ice.  (This is could be due to
 ! the heat fluxes being calculated on a lower resolution grid or the
-! heat fluxes not recalculated at every CICE timestep.)  At ice free points, 
+! heat fluxes not recalculated at every CICE timestep.)  At ice free points,
 ! conserve energy and water by passing these fluxes to the ocean.
 !
 ! author: A. McLaren, Met Office
@@ -516,7 +514,7 @@
       ! local variables
       integer (kind=int_kind) :: &
           i, j, n    ! horizontal indices
-      
+
       real (kind=dbl_kind)    :: &
           rLsub            ! 1/Lsub
 
@@ -535,7 +533,7 @@
          enddo   ! j
       enddo      ! n
 
-#endif 
+#endif
 
       end subroutine sfcflux_to_ocn
 
