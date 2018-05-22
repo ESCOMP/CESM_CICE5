@@ -18,10 +18,11 @@ module ice_comp_mct
 #ifdef USE_ESMF_LIB
   use esmf
 #else
-  use esmf, only: ESMF_clock
+  use esmf, only: ESMF_clock, ESMF_time, ESMF_ClockGet, ESMF_TimeGet
 #endif
 
-  use seq_flds_mod
+  use shr_flds_mod,    only : shr_flds_dom_coord, shr_flds_dom_other
+  use seq_flds_mod,    only : seq_flds_x2i_fields, seq_flds_i2x_fields, seq_flds_i2o_per_cat
   use seq_cdata_mod,   only : seq_cdata, seq_cdata_setptrs
   use seq_infodata_mod,only : seq_infodata_type, seq_infodata_getdata,       &
 		              seq_infodata_putdata, seq_infodata_start_type_cont, &
@@ -160,10 +161,10 @@ contains
     integer            :: nleaps      ! number of leap days before current year
     integer            :: mpicom_loc  ! temporary mpicom
     logical (kind=log_kind) :: atm_aero
-    real(r8) :: mrss, mrss0,msize,msize0
+    real(r8)        :: mrss, mrss0,msize,msize0
+    type(ESMF_TIME) :: currTime
+    integer         :: rc
     character(len=*), parameter  :: SubName = "ice_init_mct"
-! !REVISION HISTORY:
-! Author: Mariana Vertenstein
 !EOP
 !-----------------------------------------------------------------------
 
@@ -173,7 +174,7 @@ contains
     ! Determine attribute vector indices
     !--------------------------------------------------------------------------
 
-    call ice_cpl_indices_set()
+    call ice_cpl_indices_set(seq_flds_x2i_fields, seq_flds_i2x_fields, seq_flds_i2o_per_cat)
 
     !---------------------------------------------------------------------------
     ! Set cdata pointers
@@ -181,9 +182,6 @@ contains
 
     call seq_cdata_setptrs(cdata_i, ID=ICEID, mpicom=mpicom_loc, &
          gsMap=gsMap_ice, dom=dom_i, infodata=infodata)
-
-    ! Determine time of next atmospheric shortwave calculation
-    call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
 
     ! Determine if aerosols are coming from the coupler
     call seq_infodata_GetData(infodata, atm_aero=atm_aero )
@@ -224,7 +222,16 @@ contains
 
     ! Set nextsw_cday to -1 for continue and branch runs.
 
-    if (trim(runtype) /= 'initial') nextsw_cday = -1
+    if (trim(runtype) /= 'initial') then
+       nextsw_cday = -1
+    else
+       ! TODO NUOPC: The following was the initial implementation - and is replaced by the nuopc implementation below
+       ! *** call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday ) ***
+       call ESMF_ClockGet( Eclock, currTime=currTime, rc=rc )
+       if ( rc /= ESMF_SUCCESS ) call shr_sys_abort('ice_ERROR: ice_comp_mct for ESMF_CLockGet inquiry')
+       call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+       if ( rc /= ESMF_SUCCESS ) call shr_sys_abort('ERROR: ice_comp_mct for ESMF_TimeGet inquiry')
+    end if
 
     !=============================================================
     ! Set ice dtime to ice coupling frequency
@@ -247,13 +254,9 @@ contains
 
     call seq_infodata_GetData(infodata, tfreeze_option=tfrz_option )
 
-    if (my_task == master_task) then
-       write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
-       if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
-          write(nu_diag,*) trim(subname),' Warning: Using ktherm = 2 and tfrz_option = ', &
-                           trim(tfrz_option)
-       endif
-    endif
+    !=============================================================
+    ! Write diagnostic output - must happen AFTER call to cice_init
+    !=============================================================
 
     ! atmice flux calculation
     call seq_infodata_GetData(infodata, &
@@ -262,6 +265,11 @@ contains
          flux_max_iteration=flux_convergence_max_iteration)
 
     if (my_task == master_task) then
+       write(nu_diag,*) trim(subname),' cice init nextsw_cday = ',nextsw_cday
+       write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
+       if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
+          write(nu_diag,*) trim(subname),' Warning: Using ktherm = 2 and tfrz_option = ', trim(tfrz_option)
+       endif
        write(nu_diag,*) trim(subname),' inst_name   = ',trim(inst_name)
        write(nu_diag,*) trim(subname),' inst_index  = ',inst_index
        write(nu_diag,*) trim(subname),' inst_suffix = ',trim(inst_suffix)
@@ -420,10 +428,10 @@ contains
     else
        call ice_export (i2x_i%rattr)  !Send initial state to driver
     endif
-! tcraig: iceberg_prognostic is false by default in cesm1.3
-! not explicitly setting it here makes cice5 work in cesm1.1
-!    call seq_infodata_PutData( infodata, ice_prognostic=.true., &
-!      iceberg_prognostic=.false., ice_nx = nxg, ice_ny = nyg )
+    ! tcraig: iceberg_prognostic is false by default in cesm1.3
+    ! not explicitly setting it here makes cice5 work in cesm1.1
+    !    call seq_infodata_PutData( infodata, ice_prognostic=.true., &
+    !         iceberg_prognostic=.false., ice_nx = nxg, ice_ny = nyg )
     call seq_infodata_PutData( infodata, ice_prognostic=.true., &
       ice_nx = nxg, ice_ny = nyg )
     call t_stopf ('cice_mct_init')
@@ -529,6 +537,10 @@ contains
 
     ! Determine time of next atmospheric shortwave calculation
     call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
+
+    if (my_task == master_task) then
+       write(nu_diag,*) trim(subname),' cice istep, nextsw_cday = ',istep, nextsw_cday
+    end if
 
     ! Determine orbital parameters
     call seq_infodata_GetData(infodata, orb_eccen=eccen, orb_mvelpp=mvelpp, &
@@ -781,8 +793,8 @@ contains
     ! Initialize mct domain type
     ! lat/lon in degrees,  area in radians^2, mask is 1 (ocean), 0 (non-ocean)
     !
-    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(seq_flds_dom_coord), &
-       OtherChars=trim(seq_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(shr_flds_dom_coord), &
+       OtherChars=trim(shr_flds_dom_other), lsize=lsize )
     call mct_aVect_zero(dom_i%data)
     !
     allocate(data(lsize))
@@ -1105,8 +1117,8 @@ contains
     deallocate(start,length,pe_loc)
 
     lsize = mct_gsmap_lsize(gsmap_i,mpicom_i)
-    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(seq_flds_dom_coord), &
-       OtherChars=trim(seq_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(shr_flds_dom_coord), &
+       OtherChars=trim(shr_flds_dom_other), lsize=lsize )
     call mct_aVect_zero(dom_i%data)
 
     ! Determine global gridpoint number attribute, GlobGridNum, which is set automatically by MCT

@@ -27,12 +27,14 @@ module ice_import_export
   use ice_state       , only: tr_aero, tr_iso, tr_iage, tr_FY, tr_pond, tr_lvl
   use ice_domain      , only: nblocks, blocks_ice, halo_info, distrb_info
   use ice_domain_size , only: nx_global, ny_global, block_size_x, block_size_y, max_blocks, ncat
-  use ice_grid        , only: tlon, tlat, tarea, tmask, anglet, hm
+  use ice_grid        , only: tlon, tlat, tarea, tmask, anglet, hm, ocn_gridcell_frac
   use ice_grid        , only: grid_type, t2ugrid_vector
   use ice_boundary    , only: ice_HaloUpdate
   use ice_fileunits   , only: nu_diag
   use ice_prescribed_mod
   use ice_cpl_indices
+  use ice_communicate , only: my_task, master_task, MPI_COMM_ICE
+  use ice_calendar    , only: istep
   use perf_mod        , only: t_startf, t_stopf, t_barrierf
 
   implicit none
@@ -45,6 +47,8 @@ module ice_import_export
 #else
   logical, parameter :: rasm_snowrain_split = .false.
 #endif
+   integer     ,parameter :: debug = 1 ! internal debug level
+   character(*),parameter :: F01 = "('(ice_import_export) ',a, i8,2x,i8,2x,d21.14)"
 
   !==============================================================================
 contains
@@ -111,9 +115,8 @@ contains
              aflds(i,j,14,iblk)   = x2i(index_x2i_Faxa_rain,n)
              aflds(i,j,15,iblk)   = x2i(index_x2i_Faxa_snow,n)
 
-          enddo    !i
-       enddo    !j
-
+          enddo  !i
+       enddo     !j
     enddo        !iblk
 
     if (.not.prescribed_ice) then
@@ -247,7 +250,7 @@ contains
              faero_atm(i,j,1,iblk) = x2i(index_x2i_Faxa_bcphodry,n)
 
              faero_atm(i,j,2,iblk) = x2i(index_x2i_Faxa_bcphidry,n) &
-                  + x2i(index_x2i_Faxa_bcphiwet,n)
+                                   + x2i(index_x2i_Faxa_bcphiwet,n)
              ! Combine all of the dust into one category
              faero_atm(i,j,3,iblk) = x2i(index_x2i_Faxa_dstwet1,n) &
                   + x2i(index_x2i_Faxa_dstdry1,n) &
@@ -260,21 +263,21 @@ contains
 
              if (index_x2i_Sa_shum_HDO > 0) then
 
-             Qa_iso(i,j,1,iblk)  = x2i(index_x2i_Sa_shum_HDO,n)
-             Qa_iso(i,j,2,iblk)  = x2i(index_x2i_Sa_shum_16O,n)
-             Qa_iso(i,j,3,iblk)  = x2i(index_x2i_Sa_shum_18O,n)
+                Qa_iso(i,j,1,iblk)  = x2i(index_x2i_Sa_shum_HDO,n)
+                Qa_iso(i,j,2,iblk)  = x2i(index_x2i_Sa_shum_16O,n)
+                Qa_iso(i,j,3,iblk)  = x2i(index_x2i_Sa_shum_18O,n)
 
-             fiso_rain(i,j,1,iblk) = x2i(index_x2i_Faxa_rain_HDO,n)
-             fiso_rain(i,j,2,iblk) = x2i(index_x2i_Faxa_rain_16O,n)
-             fiso_rain(i,j,3,iblk) = x2i(index_x2i_Faxa_rain_18O,n)
+                fiso_rain(i,j,1,iblk) = x2i(index_x2i_Faxa_rain_HDO,n)
+                fiso_rain(i,j,2,iblk) = x2i(index_x2i_Faxa_rain_16O,n)
+                fiso_rain(i,j,3,iblk) = x2i(index_x2i_Faxa_rain_18O,n)
 
-             fiso_atm(i,j,1,iblk) = x2i(index_x2i_Faxa_snow_HDO,n)
-             fiso_atm(i,j,2,iblk) = x2i(index_x2i_Faxa_snow_16O,n)
-             fiso_atm(i,j,3,iblk) = x2i(index_x2i_Faxa_snow_18O,n)
+                fiso_atm(i,j,1,iblk) = x2i(index_x2i_Faxa_snow_HDO,n)
+                fiso_atm(i,j,2,iblk) = x2i(index_x2i_Faxa_snow_16O,n)
+                fiso_atm(i,j,3,iblk) = x2i(index_x2i_Faxa_snow_18O,n)
 
-             HDO_ocn(i,j,iblk)    = x2i(index_x2i_So_roce_HDO,n)
-             H2_16O_ocn(i,j,iblk) = x2i(index_x2i_So_roce_16O,n)
-             H2_18O_ocn(i,j,iblk) = x2i(index_x2i_So_roce_18O,n)
+                HDO_ocn(i,j,iblk)    = x2i(index_x2i_So_roce_HDO,n)
+                H2_16O_ocn(i,j,iblk) = x2i(index_x2i_So_roce_16O,n)
+                H2_18O_ocn(i,j,iblk) = x2i(index_x2i_So_roce_18O,n)
 
              endif
           enddo    !i
@@ -368,6 +371,70 @@ contains
     enddo
     !$OMP END PARALLEL DO
     call t_stopf ('cice_imp_atm')
+
+    !-----------------------------------------------------------------
+    ! debug output
+    !-----------------------------------------------------------------
+
+    if (debug > 0 .and. my_task==master_task) then
+       n=0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo; ihi = this_block%ihi
+          jlo = this_block%jlo; jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                write(nu_diag,F01)'import: istep, n, So_dhdx       = ',istep,n,x2i(index_x2i_So_dhdx,n)
+                write(nu_diag,F01)'import: istep, n, So_dhdxy      = ',istep,n,x2i(index_x2i_So_dhdy,n)
+                write(nu_diag,F01)'import: istep, n, So_t          = ',istep,n,x2i(index_x2i_So_t,n)
+                write(nu_diag,F01)'import: istep, n, So_s          = ',istep,n,x2i(index_x2i_So_s,n)
+                write(nu_diag,F01)'import: istep, n, So_u          = ',istep,n,x2i(index_x2i_So_u,n)
+                write(nu_diag,F01)'import: istep, n, So_v          = ',istep,n,x2i(index_x2i_So_v,n)
+                write(nu_diag,F01)'import: istep, n, Sa_u          = ',istep,n,x2i(index_x2i_Sa_u,n)
+                write(nu_diag,F01)'import: istep, n, Sa_v          = ',istep,n,x2i(index_x2i_Sa_v,n)
+                write(nu_diag,F01)'import: istep, n, Sa_z          = ',istep,n,x2i(index_x2i_Sa_z,n)
+                write(nu_diag,F01)'import: istep, n, So_ptem       = ',istep,n,x2i(index_x2i_Sa_ptem,n)
+                write(nu_diag,F01)'import: istep, n, So_tbot       = ',istep,n,x2i(index_x2i_Sa_tbot,n)
+                write(nu_diag,F01)'import: istep, n, So_shum       = ',istep,n,x2i(index_x2i_Sa_shum,n)
+                write(nu_diag,F01)'import: istep, n, Sa_dens       = ',istep,n,x2i(index_x2i_Sa_dens,n)
+                write(nu_diag,F01)'import: istep, n, Fioo_q        = ',istep,n,x2i(index_x2i_Fioo_q,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swvdr    = ',istep,n,x2i(index_x2i_Faxa_swvdr,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swndr    = ',istep,n,x2i(index_x2i_Faxa_swndr,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swvdf    = ',istep,n,x2i(index_x2i_Faxa_swvdf,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swndf    = ',istep,n,x2i(index_x2i_Faxa_swndf,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_lwdn     = ',istep,n,x2i(index_x2i_Faxa_lwdn,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_rain     = ',istep,n,x2i(index_x2i_Faxa_rain,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_snow     = ',istep,n,x2i(index_x2i_Faxa_snow,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_bcphodry = ',istep,n,x2i(index_x2i_Faxa_bcphodry,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_bcphidry = ',istep,n,x2i(index_x2i_Faxa_bcphidry,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_bcphiwet = ',istep,n,x2i(index_x2i_Faxa_bcphiwet,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet1  = ',istep,n,x2i(index_x2i_Faxa_dstwet1,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry1  = ',istep,n,x2i(index_x2i_Faxa_dstdry1,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet2  = ',istep,n,x2i(index_x2i_Faxa_dstwet2,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry2  = ',istep,n,x2i(index_x2i_Faxa_dstdry2,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet3  = ',istep,n,x2i(index_x2i_Faxa_dstwet3,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry3  = ',istep,n,x2i(index_x2i_Faxa_dstdry3,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet4  = ',istep,n,x2i(index_x2i_Faxa_dstwet4,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry4  = ',istep,n,x2i(index_x2i_Faxa_dstdry4,n)
+                if (index_x2i_Sa_shum_HDO > 0) then
+                   write(nu_diag,F01)'import: istep, n, Sa_shum_HDO   = ',istep,n,x2i(index_x2i_Sa_shum_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, Sa_shum_16O   = ',istep,n,x2i(index_x2i_Sa_shum_16O,n)
+                   write(nu_diag,F01)'import: istep, n, Sa_shum_18O   = ',istep,n,x2i(index_x2i_Sa_shum_18O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_rain_HDO = ',istep,n,x2i(index_x2i_Faxa_rain_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_rain_16O = ',istep,n,x2i(index_x2i_Faxa_rain_16O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_rain_18O = ',istep,n,x2i(index_x2i_Faxa_rain_18O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_snow_HDO = ',istep,n,x2i(index_x2i_Faxa_snow_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_snow_16O = ',istep,n,x2i(index_x2i_Faxa_snow_16O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_snow_18O = ',istep,n,x2i(index_x2i_Faxa_snow_18O,n)
+                   write(nu_diag,F01)'import: istep, n, So_roce_HDO   = ',istep,n,x2i(index_x2i_So_roce_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, So_roce_16O   = ',istep,n,x2i(index_x2i_So_roce_16O,n)
+                   write(nu_diag,F01)'import: istep, n, So_roce_18O   = ',istep,n,x2i(index_x2i_So_roce_18O,n)
+                end if
+             end do
+          end do
+       end do
+    end if
 
   end subroutine ice_import
 
@@ -512,6 +579,15 @@ contains
              !-------states--------------------
              i2x(index_i2x_Si_ifrac ,n)    = ailohi(i,j,iblk)
 
+             ! this is needed for the nuopc interface where the domain information is not sent over separately
+             if (index_i2x_Si_imask /= 0) then
+                if (trim(grid_type) == 'latlon') then
+                   i2x(index_i2x_Si_imask ,n) = ocn_gridcell_frac(i,j,iblk)
+                else
+                   i2x(index_i2x_Si_imask ,n) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
+                end if
+             end if
+
              if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then
                 !-------states--------------------
                 i2x(index_i2x_Si_t     ,n)    = Tsrf(i,j,iblk)
@@ -522,18 +598,16 @@ contains
                 i2x(index_i2x_Si_u10  ,n)     = Uref(i,j,iblk)
                 i2x(index_i2x_Si_tref  ,n)    = Tref(i,j,iblk)
                 i2x(index_i2x_Si_qref  ,n)    = Qref(i,j,iblk)
-                i2x(index_i2x_Si_snowh ,n)    = vsno(i,j,iblk) &
-                     / ailohi(i,j,iblk)
+                i2x(index_i2x_Si_snowh ,n)    = vsno(i,j,iblk) / ailohi(i,j,iblk)
 
                 if (index_i2x_Si_logz0 > 0) then
-                if (Cdn_atm(i,j,iblk) > c0) then
-                 i2x(index_i2x_Si_logz0 ,n) = log(zref)-(vonkar/sqrt(Cdn_atm(i,j,iblk)))
-                else
-                 !--- tcraig, this should not happen but if it does, continue gracefully
-                 write(nu_diag,*) trim(subname),&
-                      ' WARNING: Cdn_atm error ',Cdn_atm(i,j,iblk),i,j,iblk
-                 i2x(index_i2x_Si_logz0 ,n)    = log(iceruf)
-                endif
+                   if (Cdn_atm(i,j,iblk) > c0) then
+                      i2x(index_i2x_Si_logz0 ,n) = log(zref)-(vonkar/sqrt(Cdn_atm(i,j,iblk)))
+                   else
+                      !--- tcraig, this should not happen but if it does, continue gracefully
+                      write(nu_diag,*) trim(subname), ' WARNING: Cdn_atm error ',Cdn_atm(i,j,iblk),i,j,iblk
+                      i2x(index_i2x_Si_logz0 ,n)    = log(iceruf)
+                   endif
                 endif
 
                 !--- a/i fluxes computed by ice
@@ -552,25 +626,26 @@ contains
                 i2x(index_i2x_Fioi_salt ,n)   = fsalt(i,j,iblk)   ! salt flux from melting   ???
                 i2x(index_i2x_Fioi_taux ,n)   = tauxo(i,j,iblk)   ! stress : i/o zonal       ???
                 i2x(index_i2x_Fioi_tauy ,n)   = tauyo(i,j,iblk)   ! stress : i/o meridional  ???
-                if ( index_i2x_Fioi_bcpho > 0) &
-                 i2x(index_i2x_Fioi_bcpho ,n)  = faero_ocn(i,j,1,iblk)  ! hydrophobic bc
-                if ( index_i2x_Fioi_bcphi > 0) &
-                 i2x(index_i2x_Fioi_bcphi ,n)  = faero_ocn(i,j,2,iblk)  ! hydrophilic bc
-                if ( index_i2x_Fioi_flxdst > 0) &
-                 i2x(index_i2x_Fioi_flxdst,n)  = faero_ocn(i,j,3,iblk)  ! dust
 
+                if (index_i2x_Fioi_bcpho > 0) then
+                   i2x(index_i2x_Fioi_bcpho ,n)  = faero_ocn(i,j,1,iblk)  ! hydrophobic bc
+                end if
+                if (index_i2x_Fioi_bcphi > 0) then
+                   i2x(index_i2x_Fioi_bcphi ,n)  = faero_ocn(i,j,2,iblk)  ! hydrophilic bc
+                end if
+                if (index_i2x_Fioi_flxdst > 0) then
+                   i2x(index_i2x_Fioi_flxdst,n)  = faero_ocn(i,j,3,iblk)  ! dust
+                end if
                 if (index_i2x_Fioi_meltw_HDO > 0) then
-
-                i2x(index_i2x_Fioi_meltw_HDO,n) = fiso_ocn (i,j,1,iblk)  !  Isotopes to ocean
-                i2x(index_i2x_Fioi_meltw_16O,n) = fiso_ocn (i,j,2,iblk)  !  Isotopes to ocean
-                i2x(index_i2x_Fioi_meltw_18O,n) = fiso_ocn (i,j,3,iblk)  !  Isotopes to ocean
-                i2x(index_i2x_Faii_evap_HDO ,n) = fiso_evap(i,j,1,iblk)  !  Isotope evap to atm
-                i2x(index_i2x_Faii_evap_16O ,n) = fiso_evap(i,j,2,iblk)  !  Isotope evap to atm
-                i2x(index_i2x_Faii_evap_18O ,n) = fiso_evap(i,j,3,iblk)  !  Isotope evap to atm
-                i2x(index_i2x_Si_qref_HDO   ,n) = Qref_iso(i,j,1,iblk)  !  Isotope qref to atm
-                i2x(index_i2x_Si_qref_16O   ,n) = Qref_iso(i,j,2,iblk)  !  Isotope qref to atm
-                i2x(index_i2x_Si_qref_18O   ,n) = Qref_iso(i,j,3,iblk)  !  Isotope qref to atm
-
+                   i2x(index_i2x_Fioi_meltw_HDO,n) = fiso_ocn (i,j,1,iblk)  !  Isotopes to ocean
+                   i2x(index_i2x_Fioi_meltw_16O,n) = fiso_ocn (i,j,2,iblk)  !  Isotopes to ocean
+                   i2x(index_i2x_Fioi_meltw_18O,n) = fiso_ocn (i,j,3,iblk)  !  Isotopes to ocean
+                   i2x(index_i2x_Faii_evap_HDO ,n) = fiso_evap(i,j,1,iblk)  !  Isotope evap to atm
+                   i2x(index_i2x_Faii_evap_16O ,n) = fiso_evap(i,j,2,iblk)  !  Isotope evap to atm
+                   i2x(index_i2x_Faii_evap_18O ,n) = fiso_evap(i,j,3,iblk)  !  Isotope evap to atm
+                   i2x(index_i2x_Si_qref_HDO   ,n) = Qref_iso(i,j,1,iblk)  !  Isotope qref to atm
+                   i2x(index_i2x_Si_qref_16O   ,n) = Qref_iso(i,j,2,iblk)  !  Isotope qref to atm
+                   i2x(index_i2x_Si_qref_18O   ,n) = Qref_iso(i,j,3,iblk)  !  Isotope qref to atm
                 endif
              end if
           enddo    !i
@@ -611,6 +686,76 @@ contains
           enddo    !j
        enddo        !iblk
     end if ! send_i2x_per_cat
+
+    !-----------------------------------------------------------------
+    ! Debug output
+    !-----------------------------------------------------------------
+
+    if (debug > 0 .and. my_task==master_task) then
+       n=0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo; ihi = this_block%ihi
+          jlo = this_block%jlo; jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+
+                !--- ice states
+                write(nu_diag,F01)'export: istep, n, Si_ifrac   = ',istep,n,i2x(index_i2x_Si_ifrac ,n)
+                write(nu_diag,F01)'export: istep, n, Si_t       = ',istep,n,i2x(index_i2x_Si_t     ,n)
+                write(nu_diag,F01)'export: istep, n, Si_avsdr   = ',istep,n,i2x(index_i2x_Si_avsdr ,n)
+                write(nu_diag,F01)'export: istep, n, Si_anidr   = ',istep,n,i2x(index_i2x_Si_anidr ,n)
+                write(nu_diag,F01)'export: istep, n, Si_avsdf   = ',istep,n,i2x(index_i2x_Si_avsdf ,n)
+                write(nu_diag,F01)'export: istep, n, Si_anidf   = ',istep,n,i2x(index_i2x_Si_anidf ,n)
+                write(nu_diag,F01)'export: istep, n, Si_u10     = ',istep,n,i2x(index_i2x_Si_u10   ,n)
+                write(nu_diag,F01)'export: istep, n, Si_tref    = ',istep,n,i2x(index_i2x_Si_tref  ,n)
+                write(nu_diag,F01)'export: istep, n, Si_qref    = ',istep,n,i2x(index_i2x_Si_qref  ,n)
+                write(nu_diag,F01)'export: istep, n, Si_snowh   = ',istep,n,i2x(index_i2x_Si_snowh ,n)
+                if (index_i2x_Si_logz0 > 0) then
+                   write(nu_diag,F01)'export: istep, n, Si_logz0= ',istep,n, i2x(index_i2x_Si_logz0 ,n)
+                end if
+
+                !--- a/i fluxes computed by ice
+                write(nu_diag,F01)'export: istep, n, Faii_taux  = ',istep,n,i2x(index_i2x_Faii_taux ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_tauy  = ',istep,n,i2x(index_i2x_Faii_tauy ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_lat   = ',istep,n,i2x(index_i2x_Faii_lat  ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_sen   = ',istep,n,i2x(index_i2x_Faii_sen  ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_lwup  = ',istep,n,i2x(index_i2x_Faii_lwup ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_evap  = ',istep,n,i2x(index_i2x_Faii_evap ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_swnet = ',istep,n,i2x(index_i2x_Faii_swnet,n)
+
+                !--- i/o fluxes computed by ice
+                write(nu_diag,F01)'export: istep, n, Fioi_melth = ',istep,n,i2x(index_i2x_Fioi_melth,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_swpen = ',istep,n,i2x(index_i2x_Fioi_swpen,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_meltw = ',istep,n,i2x(index_i2x_Fioi_meltw,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_salt  = ',istep,n,i2x(index_i2x_Fioi_salt ,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_taux  = ',istep,n,i2x(index_i2x_Fioi_taux ,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_tauy  = ',istep,n,i2x(index_i2x_Fioi_tauy ,n)
+                if (index_i2x_Fioi_bcpho > 0) then
+                   write(nu_diag,F01)'export: istep, n, Fioi_bcpho  = ',istep,n,i2x(index_i2x_Fioi_bcpho ,n)
+                end if
+                if (index_i2x_Fioi_bcphi > 0) then
+                   write(nu_diag,F01)'export: istep, n, Fioi_bcphi  = ',istep,n,i2x(index_i2x_Fioi_bcpho ,n)
+                end if
+                if (index_i2x_Fioi_flxdst > 0) then
+                   write(nu_diag,F01)'export: istep, n, Fioi_flxdst = ',istep,n,i2x(index_i2x_Fioi_flxdst,n)
+                end if
+                if (index_i2x_Fioi_meltw_HDO > 0) then
+                   write(nu_diag,F01)'export: istep, n, Fioi_HDO      = ',istep,n,i2x(index_i2x_Fioi_meltw_HDO,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_16O      = ',istep,n,i2x(index_i2x_Fioi_meltw_16O,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_18O      = ',istep,n,i2x(index_i2x_Fioi_meltw_18O,n)
+                   write(nu_diag,F01)'export: istep, n, Faii_evap_HDO = ',istep,n,i2x(index_i2x_Faii_evap_HDO ,n)
+                   write(nu_diag,F01)'export: istep, n, Faii_evap_16O = ',istep,n,i2x(index_i2x_Faii_evap_16O ,n)
+                   write(nu_diag,F01)'export: istep, n, Faii_evap_18O = ',istep,n,i2x(index_i2x_Faii_evap_18O ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_qref_HDO   = ',istep,n,i2x(index_i2x_Si_qref_HDO   ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_qref_16O   = ',istep,n,i2x(index_i2x_Si_qref_16O   ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_qref_18O   = ',istep,n,i2x(index_i2x_Si_qref_18O   ,n)
+                end if
+             end do
+          end do
+       end do
+    end if
 
   end subroutine ice_export
 
