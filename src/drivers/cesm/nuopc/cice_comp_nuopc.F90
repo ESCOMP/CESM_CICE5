@@ -8,6 +8,7 @@ module cice_comp_nuopc
   use shr_kind_mod          , only : CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, CXX => shr_kind_CXX
   use shr_sys_mod           , only : shr_sys_abort, shr_sys_flush
   use shr_log_mod           , only : shr_log_Unit
+  use shr_cal_mod           , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
   use shr_file_mod          , only : shr_file_getlogunit, shr_file_setlogunit
   use shr_file_mod          , only : shr_file_getloglevel, shr_file_setloglevel
   use shr_file_mod          , only : shr_file_setIO, shr_file_getUnit
@@ -59,9 +60,12 @@ module cice_comp_nuopc
   use ice_scam,           only : scmlat, scmlon, single_column
   use ice_fileunits,      only : nu_diag, ice_stdout, inst_index, inst_name, inst_suffix, release_all_fileunits
   use ice_therm_shared,   only : ktherm
-  use ice_restart_shared, only : runid, runtype, restart_dir, restart_file
+  use ice_restart_shared, only : runid, runtype, restart_dir, restart_format
   use ice_history,        only : accum_hist
+  use ice_history_shared, only : history_dir, history_file, model_doi_url
   use ice_prescribed_mod, only : ice_prescribed_init
+  use ice_atmo,           only : flux_convergence_tolerance, flux_convergence_max_iteration
+  use ice_atmo,           only : use_coldair_outbreak_mod
   use CICE_InitMod,       only : CICE_Init
   use CICE_RunMod,        only : CICE_Run
   use perf_mod,           only : t_startf, t_stopf, t_barrierf
@@ -265,6 +269,10 @@ contains
     type(ESMF_VM)             :: vm
     type(ESMF_Grid)           :: Egrid
     type(ESMF_Mesh)           :: Emesh
+    type(ESMF_Time)           :: currTime                          
+    type(ESMF_TimeInterval)   :: timeStep  
+    type(ESMF_Calendar)       :: esmf_calendar                     
+    type(ESMF_CalKind_Flag)   :: esmf_caltype                      
     integer                   :: lmpicom
     integer                   :: shrlogunit    ! original log unit
     integer                   :: shrloglev     ! original log level
@@ -441,7 +449,7 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) single_column
 
-    ! Determine case name, tfreeze_optin and clock information before call to cice_init
+    ! Determine case name, tfreeze_option, flux convertence before call to cice_init
 
     call NUOPC_CompAttributeGet(gcomp, name='case_name', value=cvalue, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -450,29 +458,77 @@ contains
     call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    call seq_timemgr_EClockGetData(clock, dtime=dtime, calendar=calendar_type)
-    dt = real(dtime)
+    call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) flux_convergence_tolerance
 
-    ! Initialize cice
+    call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) flux_convergence max_iteration
+
+    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak", value=cvalue, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) use_coldair_outbreak_mod
+
+    ! Get clock information before call to cice_init
+
+    call ESMF_ClockGet( clock, &
+         currTime=currTime, startTime=startTime, stopTime=stopTime, refTime=RefTime, &
+         timeStep=timeStep, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_TimeGet( currTime, yy=yy, mm=mm, dd=dd, s=curr_tod, rc=rc )
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call shr_cal_ymd2date(yy,mm,dd,curr_ymd)
+
+    call ESMF_TimeGet( startTime, yy=yy, mm=mm, dd=dd, s=start_tod, rc=rc )
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call shr_cal_ymd2date(yy,mm,dd,start_ymd)
+
+    call ESMF_TimeGet( stopTime, yy=yy, mm=mm, dd=dd, s=stop_tod, rc=rc )
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call shr_cal_ymd2date(yy,mm,dd,stop_ymd)
+
+    call ESMF_TimeGet( refTime, yy=yy, mm=mm, dd=dd, s=ref_tod, rc=rc )
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call shr_cal_ymd2date(yy,mm,dd,ref_ymd)
+
+    call ESMF_TimeIntervalGet( timeStep, s=dtime, rc=rc )
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_TimeGet( currTime, calkindflag=esmf_caltype, rc=rc )
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    if (esmf_caltype == ESMF_CALKIND_NOLEAP) then
+       calendar_type = shr_cal_noleap
+    else if (esmf_caltype == ESMF_CALKIND_GREGORIAN) then
+       calendar_type = shr_cal_gregorian
+    else
+       call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
+    end if
+
+    ! *** Initialize cice ***
     ! Assume that always get atmospheric aerosols to cice (atm_aero no longer needed as flag)-
     ! Note that cice_init also sets time manager info as well as mpi communicator info, 
     ! including master_task and my_task
 
-    call t_startf ('cice_init')
+    call t_startf ('cice_init')p
     call cice_init( lmpicom )
     call t_stopf ('cice_init')
 
-    ! Now write output to nu_diag - must happend AFTER call to cice_init
+    ! Now write output to nu_diag - this must happen AFTER call to cice_init
 
     if (localPet == 0) then
        write(nu_diag,F00) trim(subname),' cice init nextsw_cday = ',nextsw_cday
-       write(nu_diag,*) trim(subname),' inst_name   = ',trim(inst_name)
-       write(nu_diag,*) trim(subname),' inst_index  = ',inst_index
-       write(nu_diag,*) trim(subname),' inst_suffix = ',trim(inst_suffix)
        write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
        if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
           write(nu_diag,*) trim(subname),' Warning: Using ktherm = 2 and tfrz_option = ', trim(tfrz_option)
        endif
+       write(nu_diag,*) trim(subname),' inst_name   = ',trim(inst_name)
+       write(nu_diag,*) trim(subname),' inst_index  = ',inst_index
+       write(nu_diag,*) trim(subname),' inst_suffix = ',trim(inst_suffix)
+       write(nu_diag,*) trim(subname),' flux_convergence = ', flux_convergence_tolerance
+       write(nu_diag,*) trim(subname),' flux_convergence_max_iteration = ', flux_convergence_max_iteration
     endif
 
     !---------------------------------------------------------------------------
@@ -488,11 +544,6 @@ contains
     !   - istep1 is set to istep0
     !   - idate is determined from time via the call to calendar (see below)
 
-    call seq_timemgr_EClockGetData(clock,                &
-         start_ymd=start_ymd, start_tod=start_tod,       &
-         curr_ymd=curr_ymd,   curr_tod=curr_tod,         &
-         ref_ymd=ref_ymd,     ref_tod=ref_tod)
-
     if (runtype == 'initial') then
        if (ref_ymd /= start_ymd .or. ref_tod /= start_tod) then
           if (my_task == master_task) then
@@ -506,7 +557,6 @@ contains
           write(nu_diag,*) trim(subname),'   tod from sync clock = ', start_tod
           write(nu_diag,*) trim(subname),' resetting idate to match sync clock'
        end if
-
        idate = curr_ymd
 
        if (idate < 0) then
@@ -532,7 +582,6 @@ contains
        else
           call time2sec(iyear-(year_init-1),month,mday,time)
        endif
-
        time = time+start_tod
 
        call shr_sys_flush(nu_diag)
@@ -954,12 +1003,11 @@ contains
     !--------------------------------
     ! stop timers and print timer info
     !--------------------------------
-    ! Need to have this logic here instead of in ice_final_mct since
-    ! the ice_final_mct.F90 will still be called even in aqua-planet mode
-    ! Could put this logic in the driver - but it seems easier here
+    ! Need to have this logic here instead of in finalize phase 
+    ! since the finalize phase will still be called even in aqua-planet mode
 
     ! Need to stop this at the end of every run phase in a coupled run.
-    call ice_timer_stop(timer_total)        ! stop timing
+    call ice_timer_stop(timer_total)        
 
     !--------------------------------
     ! Determine if time to stop
