@@ -60,7 +60,7 @@ module cice_comp_nuopc
   use ice_scam,           only : scmlat, scmlon, single_column
   use ice_fileunits,      only : nu_diag, ice_stdout, inst_index, inst_name, inst_suffix, release_all_fileunits
   use ice_therm_shared,   only : ktherm
-  use ice_restart_shared, only : runid, runtype, restart_dir, restart_format
+  use ice_restart_shared, only : runid, runtype, restart_dir, restart_file
   use ice_history,        only : accum_hist
   use ice_history_shared, only : history_dir, history_file, model_doi_url
   use ice_prescribed_mod, only : ice_prescribed_init
@@ -269,10 +269,25 @@ contains
     type(ESMF_VM)             :: vm
     type(ESMF_Grid)           :: Egrid
     type(ESMF_Mesh)           :: Emesh
-    type(ESMF_Time)           :: currTime                          
-    type(ESMF_TimeInterval)   :: timeStep  
-    type(ESMF_Calendar)       :: esmf_calendar                     
-    type(ESMF_CalKind_Flag)   :: esmf_caltype                      
+    type(ESMF_Time)           :: currTime      ! Current time
+    type(ESMF_Time)           :: startTime     ! Start time
+    type(ESMF_Time)           :: stopTime      ! Stop time
+    type(ESMF_Time)           :: refTime       ! Ref time
+    type(ESMF_TimeInterval)   :: timeStep      ! Model timestep
+    type(ESMF_Calendar)       :: esmf_calendar ! esmf calendar     
+    type(ESMF_CalKind_Flag)   :: esmf_caltype  ! esmf calendar type
+    integer                   :: start_ymd     ! Start date (YYYYMMDD)
+    integer                   :: start_tod     ! start time of day (s)
+    integer                   :: curr_ymd      ! Current date (YYYYMMDD)
+    integer                   :: curr_tod      ! Current time of day (s)
+    integer                   :: stop_ymd      ! stop date (YYYYMMDD)
+    integer                   :: stop_tod      ! stop time of day (sec)
+    integer                   :: ref_ymd       ! Reference date (YYYYMMDD)
+    integer                   :: ref_tod       ! reference time of day (s)
+    integer                   :: yy,mm,dd      ! Temporaries for time query 
+    integer                   :: iyear         ! yyyy
+    integer                   :: nyrp          ! yyyy
+    integer                   :: dtime         ! time step
     integer                   :: lmpicom
     integer                   :: shrlogunit    ! original log unit
     integer                   :: shrloglev     ! original log level
@@ -281,15 +296,6 @@ contains
     integer                   :: n,c,g,i,j,m   ! indices
     character(len=cs)         :: starttype     ! infodata start type
     character(len=cl)         :: caseid        ! case ID
-    integer                   :: start_ymd     ! Start date (YYYYMMDD)
-    integer                   :: start_tod     ! start time of day (s)
-    integer                   :: curr_ymd      ! Current date (YYYYMMDD)
-    integer                   :: curr_tod      ! Current time of day (s)
-    integer                   :: ref_ymd       ! Reference date (YYYYMMDD)
-    integer                   :: ref_tod       ! reference time of day (s)
-    integer                   :: iyear         ! yyyy
-    integer                   :: nyrp          ! yyyy
-    integer                   :: dtime         ! time step
     integer                   :: lsize         ! local size of coupling array
     integer                   :: lsize_loc
     integer                   :: xoff,yoff
@@ -299,7 +305,6 @@ contains
     type(mct_gsMap)           :: gsmap_extend  ! local gsmaps
     type(mct_gGrid)           :: dom_ice
     type(mct_gsMap)           :: gsMap_ice
-    type(ESMF_Time)           :: currTime
     character(len=512)        :: diro
     character(len=512)        :: logfile
     logical                   :: isPresent
@@ -464,7 +469,7 @@ contains
 
     call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) flux_convergence max_iteration
+    read(cvalue,*) flux_convergence_max_iteration
 
     call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak", value=cvalue, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -512,7 +517,7 @@ contains
     ! Note that cice_init also sets time manager info as well as mpi communicator info, 
     ! including master_task and my_task
 
-    call t_startf ('cice_init')p
+    call t_startf ('cice_init')
     call cice_init( lmpicom )
     call t_stopf ('cice_init')
 
@@ -588,7 +593,9 @@ contains
     end if
 
     call calendar(time)     ! update calendar info
-    if (write_ic) call accum_hist(dt) ! write initial conditions
+    if (write_ic) then
+       call accum_hist(dt)  ! write initial conditions
+    end if
 
     !---------------------------------------------------------------------------
     ! Initialize MCT attribute vectors and indices
