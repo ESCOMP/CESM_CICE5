@@ -202,7 +202,7 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    integer       :: n,nflds       
+    integer       :: n,nflds
     logical       :: activefld
     character(CS) :: stdname, shortname
     character(len=*), parameter :: subname=trim(modName)//':(InitializeAdvertise) '
@@ -212,7 +212,7 @@ contains
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
 
     !--------------------------------
-    ! create import and export field list 
+    ! create import and export field list
     !--------------------------------
 
     call shr_nuopc_fldList_Concat(fldListFr(compice), fldListTo(compice), flds_i2x, flds_x2i, flds_scalar_name)
@@ -274,7 +274,7 @@ contains
     type(ESMF_Time)           :: stopTime      ! Stop time
     type(ESMF_Time)           :: refTime       ! Ref time
     type(ESMF_TimeInterval)   :: timeStep      ! Model timestep
-    type(ESMF_Calendar)       :: esmf_calendar ! esmf calendar     
+    type(ESMF_Calendar)       :: esmf_calendar ! esmf calendar
     type(ESMF_CalKind_Flag)   :: esmf_caltype  ! esmf calendar type
     integer                   :: start_ymd     ! Start date (YYYYMMDD)
     integer                   :: start_tod     ! start time of day (s)
@@ -284,7 +284,7 @@ contains
     integer                   :: stop_tod      ! stop time of day (sec)
     integer                   :: ref_ymd       ! Reference date (YYYYMMDD)
     integer                   :: ref_tod       ! reference time of day (s)
-    integer                   :: yy,mm,dd      ! Temporaries for time query 
+    integer                   :: yy,mm,dd      ! Temporaries for time query
     integer                   :: iyear         ! yyyy
     integer                   :: nyrp          ! yyyy
     integer                   :: dtime         ! time step
@@ -339,7 +339,7 @@ contains
 
     call NUOPC_CompAttributeGet(gcomp, name="inst_index", value=cvalue, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) inst_index 
+    read(cvalue,*) inst_index
 
     call ESMF_AttributeGet(gcomp, name="inst_suffix", isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -471,7 +471,7 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) flux_convergence_max_iteration
 
-    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak", value=cvalue, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak_mod", value=cvalue, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) use_coldair_outbreak_mod
 
@@ -500,6 +500,7 @@ contains
 
     call ESMF_TimeIntervalGet( timeStep, s=dtime, rc=rc )
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    dt = real(dtime)
 
     call ESMF_TimeGet( currTime, calkindflag=esmf_caltype, rc=rc )
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -514,7 +515,7 @@ contains
 
     ! *** Initialize cice ***
     ! Assume that always get atmospheric aerosols to cice (atm_aero no longer needed as flag)-
-    ! Note that cice_init also sets time manager info as well as mpi communicator info, 
+    ! Note that cice_init also sets time manager info as well as mpi communicator info,
     ! including master_task and my_task
 
     call t_startf ('cice_init')
@@ -1010,11 +1011,11 @@ contains
     !--------------------------------
     ! stop timers and print timer info
     !--------------------------------
-    ! Need to have this logic here instead of in finalize phase 
+    ! Need to have this logic here instead of in finalize phase
     ! since the finalize phase will still be called even in aqua-planet mode
 
     ! Need to stop this at the end of every run phase in a coupled run.
-    call ice_timer_stop(timer_total)        
+    call ice_timer_stop(timer_total)
 
     !--------------------------------
     ! Determine if time to stop
@@ -1079,51 +1080,58 @@ contains
 
       call ESMF_TimeGet(mcurrtime, timeString=mtimestring, rc=rc)
       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-      rc=ESMF_Failure
 
       call ESMF_LogWrite(subname//" ERROR in time consistency; "//trim(dtimestring)//" ne "//trim(mtimestring),  &
            ESMF_LOGMSG_ERROR, rc=dbrc)
       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+      rc=ESMF_Failure
     endif
 
     !--------------------------------
-    ! force the driver timestep into the model clock for consistency
-    ! by default, the model timestep is probably the slowest timestep in the system
-    ! while the driver timestep will be the timestep for this NUOPC slot
-    ! also update the model stop time for this timestep
+    ! force model clock currtime and timestep to match driver and set stoptime
     !--------------------------------
 
     mstoptime = mcurrtime + dtimestep
 
-    call ESMF_ClockSet(mclock, timeStep=dtimestep, stopTime=mstoptime, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmCount=alarmCount, rc=rc)
+    call ESMF_ClockSet(mclock, currTime=dcurrtime, timeStep=dtimestep, stopTime=mstoptime, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !--------------------------------
     ! copy alarms from driver to model clock if model clock has no alarms (do this only once!)
     !--------------------------------
 
+    call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmCount=alarmCount, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
     if (alarmCount == 0) then
       call ESMF_ClockGetAlarmList(dclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmCount=alarmCount, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+      if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
       allocate(alarmList(alarmCount))
       call ESMF_ClockGetAlarmList(dclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmList=alarmList, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+      if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
       do n = 1, alarmCount
          ! call ESMF_AlarmPrint(alarmList(n), rc=rc)
-         if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+         ! if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
          dalarm = ESMF_AlarmCreate(alarmList(n), rc=rc)
          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
          call ESMF_AlarmSet(dalarm, clock=mclock, rc=rc)
          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
       enddo
 
       deallocate(alarmList)
     endif
+
+    !--------------------------------
+    ! Advance model clock to trigger alarms then reset model clock back to currtime
+    !--------------------------------
+
+    call ESMF_ClockAdvance(mclock,rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_ClockSet(mclock, currTime=dcurrtime, timeStep=dtimestep, stopTime=mstoptime, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
 
