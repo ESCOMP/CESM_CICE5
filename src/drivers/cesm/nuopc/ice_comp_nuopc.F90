@@ -1,4 +1,4 @@
-module cice_comp_nuopc
+module ice_comp_nuopc
 
   !----------------------------------------------------------------------------
   ! This is the NUOPC cap for CICE
@@ -104,7 +104,7 @@ module cice_comp_nuopc
   integer(IN)                :: compid               ! component id
 
   !----- formats -----
-  character(*),parameter :: modName =  "(cice_comp_nuopc)"
+  character(*),parameter :: modName =  "(ice_comp_nuopc)"
   character(*),parameter :: u_FILE_u = __FILE__
 
   !--- for coupling on other grid from gridcpl_file ---
@@ -309,7 +309,7 @@ contains
     character(len=512)        :: logfile
     logical                   :: isPresent
     integer                   :: localPet
-    character(*), parameter   :: F00   = "('(cice_comp_nuopc) ',2a,1x,d21.14)"
+    character(*), parameter   :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
     !--------------------------------
 
@@ -845,7 +845,7 @@ contains
     integer          :: yy,mm,dd   ! year, month, day, time of day
     character(CL)    :: restart_date
     character(CL)    :: restart_filename
-    character(*)   , parameter  :: F00   = "('(cice_comp_nuopc) ',2a,i8,d21.14)"
+    character(*)   , parameter  :: F00   = "('(ice_comp_nuopc) ',2a,i8,d21.14)"
     character(len=*),parameter  :: subname=trim(modName)//':(ModelAdvance) '
     !--------------------------------
 
@@ -1144,8 +1144,8 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    character(*), parameter :: F00   = "('(cice_comp_nuopc) ',8a)"
-    character(*), parameter :: F91   = "('(cice_comp_nuopc) ',73('-'))"
+    character(*), parameter :: F00   = "('(ice_comp_nuopc) ',8a)"
+    character(*), parameter :: F91   = "('(ice_comp_nuopc) ',73('-'))"
     character(len=*),parameter  :: subname=trim(modName)//':(ModelFinalize) '
     !--------------------------------
 
@@ -1676,4 +1676,4 @@ contains
 
   end subroutine ice_SetGSMap_mct
 
-end module cice_comp_nuopc
+end module ice_comp_nuopc
