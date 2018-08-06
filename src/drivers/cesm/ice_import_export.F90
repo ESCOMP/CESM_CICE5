@@ -47,7 +47,7 @@ module ice_import_export
 #else
   logical, parameter :: rasm_snowrain_split = .false.
 #endif
-   integer     ,parameter :: debug = 1 ! internal debug level
+   integer     ,parameter :: debug = 0 ! internal debug level
    character(*),parameter :: F01 = "('(ice_import_export) ',a, i8,2x,i8,2x,d21.14)"
 
   !==============================================================================
@@ -386,7 +386,7 @@ contains
              do i = ilo, ihi
                 n = n+1
                 write(nu_diag,F01)'import: istep, n, So_dhdx       = ',istep,n,x2i(index_x2i_So_dhdx,n)
-                write(nu_diag,F01)'import: istep, n, So_dhdxy      = ',istep,n,x2i(index_x2i_So_dhdy,n)
+                write(nu_diag,F01)'import: istep, n, So_dhdy       = ',istep,n,x2i(index_x2i_So_dhdy,n)
                 write(nu_diag,F01)'import: istep, n, So_t          = ',istep,n,x2i(index_x2i_So_t,n)
                 write(nu_diag,F01)'import: istep, n, So_s          = ',istep,n,x2i(index_x2i_So_s,n)
                 write(nu_diag,F01)'import: istep, n, So_u          = ',istep,n,x2i(index_x2i_So_u,n)
@@ -394,9 +394,9 @@ contains
                 write(nu_diag,F01)'import: istep, n, Sa_u          = ',istep,n,x2i(index_x2i_Sa_u,n)
                 write(nu_diag,F01)'import: istep, n, Sa_v          = ',istep,n,x2i(index_x2i_Sa_v,n)
                 write(nu_diag,F01)'import: istep, n, Sa_z          = ',istep,n,x2i(index_x2i_Sa_z,n)
-                write(nu_diag,F01)'import: istep, n, So_ptem       = ',istep,n,x2i(index_x2i_Sa_ptem,n)
-                write(nu_diag,F01)'import: istep, n, So_tbot       = ',istep,n,x2i(index_x2i_Sa_tbot,n)
-                write(nu_diag,F01)'import: istep, n, So_shum       = ',istep,n,x2i(index_x2i_Sa_shum,n)
+                write(nu_diag,F01)'import: istep, n, Sa_ptem       = ',istep,n,x2i(index_x2i_Sa_ptem,n)
+                write(nu_diag,F01)'import: istep, n, Sa_tbot       = ',istep,n,x2i(index_x2i_Sa_tbot,n)
+                write(nu_diag,F01)'import: istep, n, Sa_shum       = ',istep,n,x2i(index_x2i_Sa_shum,n)
                 write(nu_diag,F01)'import: istep, n, Sa_dens       = ',istep,n,x2i(index_x2i_Sa_dens,n)
                 write(nu_diag,F01)'import: istep, n, Fioo_q        = ',istep,n,x2i(index_x2i_Fioo_q,n)
                 write(nu_diag,F01)'import: istep, n, Faxa_swvdr    = ',istep,n,x2i(index_x2i_Faxa_swvdr,n)
