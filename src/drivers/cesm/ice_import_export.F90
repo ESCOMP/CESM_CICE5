@@ -61,13 +61,13 @@ contains
     real(r8), intent(inout) :: x2i(:,:)
     !
     ! Local variables
-    integer     :: i, j, iblk, n
-    integer     :: ilo, ihi, jlo, jhi !beginning and end of physical domain
-    type(block) :: this_block         ! block information for current block
+    integer                          :: i, j, iblk, n
+    integer                          :: ilo, ihi, jlo, jhi !beginning and end of physical domain
+    type(block)                      :: this_block         ! block information for current block
     integer,parameter                :: nflds=15,nfldv=6
     real (kind=dbl_kind),allocatable :: aflds(:,:,:,:)
     real (kind=dbl_kind)             :: workx, worky
-    real (kind=dbl_kind) :: MIN_RAIN_TEMP, MAX_SNOW_TEMP
+    real (kind=dbl_kind)             :: MIN_RAIN_TEMP, MAX_SNOW_TEMP
     logical (kind=log_kind)          :: first_call = .true.
     character(len=*),parameter :: subname = 'ice_import'
     !-----------------------------------------------------
@@ -308,20 +308,20 @@ contains
              workx      = uocn  (i,j,iblk) ! currents, m/s
              worky      = vocn  (i,j,iblk)
              uocn(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) & ! convert to POP grid
-                  + worky*sin(ANGLET(i,j,iblk))
+                            + worky*sin(ANGLET(i,j,iblk))
              vocn(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) &
-                  - workx*sin(ANGLET(i,j,iblk))
+                            - workx*sin(ANGLET(i,j,iblk))
 
              workx      = ss_tltx  (i,j,iblk)           ! sea sfc tilt, m/m
              worky      = ss_tlty  (i,j,iblk)
              ss_tltx(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) & ! convert to POP grid
-                  + worky*sin(ANGLET(i,j,iblk))
+                               + worky*sin(ANGLET(i,j,iblk))
              ss_tlty(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) &
-                  - workx*sin(ANGLET(i,j,iblk))
+                               - workx*sin(ANGLET(i,j,iblk))
 
              sst(i,j,iblk) = sst(i,j,iblk) - Tffresh       ! sea sfc temp (C)
 
-             sss(i,j,iblk)=max(sss(i,j,iblk),c0)
+             sss(i,j,iblk) = max(sss(i,j,iblk),c0)
 
           enddo
        enddo

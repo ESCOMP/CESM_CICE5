@@ -62,7 +62,6 @@ module ice_cpl_indices
   integer :: index_x2i_Sa_u            ! bottom atm level zon wind
   integer :: index_x2i_Sa_v            ! bottom atm level mer wind
   integer :: index_x2i_Sa_tbot         ! bottom atm level temp
-  integer :: index_x2i_Sa_pbot         ! bottom atm level pressure
   integer :: index_x2i_Sa_ptem         ! bottom atm level pot temp
   integer :: index_x2i_Sa_shum         ! bottom atm level spec hum
   integer :: index_x2i_Sa_dens         ! bottom atm level air den
@@ -80,9 +79,6 @@ module ice_cpl_indices
   integer :: index_x2i_Faxa_bcphidry   ! flux: Black Carbon hydrophilic dry deposition
   integer :: index_x2i_Faxa_bcphodry   ! flux: Black Carbon hydrophobic dry deposition
   integer :: index_x2i_Faxa_bcphiwet   ! flux: Black Carbon hydrophilic wet deposition
-  integer :: index_x2i_Faxa_ocphidry   ! flux: Organic Carbon hydrophilic dry deposition
-  integer :: index_x2i_Faxa_ocphodry   ! flux: Organic Carbon hydrophobic dry deposition
-  integer :: index_x2i_Faxa_ocphiwet   ! flux: Organic Carbon hydrophilic dry deposition
   integer :: index_x2i_Faxa_dstwet1    ! flux: Size 1 dust -- wet deposition
   integer :: index_x2i_Faxa_dstwet2    ! flux: Size 2 dust -- wet deposition
   integer :: index_x2i_Faxa_dstwet3    ! flux: Size 3 dust -- wet deposition
@@ -153,7 +149,7 @@ contains
     index_i2x_Fioi_bcpho    = mct_avect_indexra(i2x,'Fioi_bcpho',perrWith='quiet')
     index_i2x_Fioi_flxdst   = mct_avect_indexra(i2x,'Fioi_flxdst',perrWith='quiet')
 
-!   Needed for ISOTOPES.
+    ! Needed for ISOTOPES.
 
     index_i2x_Fioi_meltw_HDO = 0
     index_i2x_Fioi_meltw_16O = 0
@@ -195,7 +191,6 @@ contains
     index_x2i_Sa_v          = mct_avect_indexra(x2i,'Sa_v')
     index_x2i_Sa_tbot       = mct_avect_indexra(x2i,'Sa_tbot')
     index_x2i_Sa_ptem       = mct_avect_indexra(x2i,'Sa_ptem')
-    index_x2i_Sa_pbot       = mct_avect_indexra(x2i,'Sa_pbot')
     index_x2i_Sa_shum       = mct_avect_indexra(x2i,'Sa_shum')
     index_x2i_Sa_dens       = mct_avect_indexra(x2i,'Sa_dens')
     index_x2i_So_dhdx       = mct_avect_indexra(x2i,'So_dhdx')
@@ -211,9 +206,6 @@ contains
     index_x2i_Faxa_bcphidry = mct_avect_indexra(x2i,'Faxa_bcphidry')
     index_x2i_Faxa_bcphodry = mct_avect_indexra(x2i,'Faxa_bcphodry')
     index_x2i_Faxa_bcphiwet = mct_avect_indexra(x2i,'Faxa_bcphiwet')
-    index_x2i_Faxa_ocphidry = mct_avect_indexra(x2i,'Faxa_ocphidry')
-    index_x2i_Faxa_ocphodry = mct_avect_indexra(x2i,'Faxa_ocphodry')
-    index_x2i_Faxa_ocphiwet = mct_avect_indexra(x2i,'Faxa_ocphiwet')
     index_x2i_Faxa_dstdry1  = mct_avect_indexra(x2i,'Faxa_dstdry1')
     index_x2i_Faxa_dstdry2  = mct_avect_indexra(x2i,'Faxa_dstdry2')
     index_x2i_Faxa_dstdry3  = mct_avect_indexra(x2i,'Faxa_dstdry3')
@@ -223,8 +215,7 @@ contains
     index_x2i_Faxa_dstwet3  = mct_avect_indexra(x2i,'Faxa_dstwet3')
     index_x2i_Faxa_dstwet4  = mct_avect_indexra(x2i,'Faxa_dstwet4')
 
-!   Needed for ISOTOPES.
-
+    !  Needed for ISOTOPES.
     index_x2i_Sa_shum_16O   = 0
     index_x2i_Sa_shum_18O   = 0
     index_x2i_Sa_shum_HDO   = 0
