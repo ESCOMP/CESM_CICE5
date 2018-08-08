@@ -1,4 +1,13 @@
 ===============================================================
+cice5_cesm2_0_rel03
+Originator: dbailey
+Date:  8 Aug 2018
+Version: 5.0
+One-line: Fix config_compsets.xml
+
+	modified:   cime_config/config_compsets.xml
+
+===============================================================
 cice5_20180530
 Originator: dbailey
 Date:  30 May 2018
