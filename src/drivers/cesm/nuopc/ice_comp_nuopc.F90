@@ -15,7 +15,7 @@ module ice_comp_nuopc
   use NUOPC_Model           , only : model_label_SetRunClock    => label_SetRunClock
   use NUOPC_Model           , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model           , only : NUOPC_ModelGet
-  use med_constants_mod     , only : IN, R8, I8, CXX, CS,CL
+  use med_constants_mod     , only : R8, I8, CXX, CS,CL
   use shr_sys_mod           , only : shr_sys_abort
   use shr_log_mod           , only : shr_log_Unit
   use shr_file_mod          , only : shr_file_getlogunit, shr_file_setlogunit
@@ -47,7 +47,7 @@ module ice_comp_nuopc
   use ice_blocks,             only : block, get_block, nx_block, ny_block
   use ice_grid,               only : tlon, tlat, tarea, hm, grid_type, gridcpl_file, ocn_gridcell_frac
   use ice_constants,          only : rad_to_deg, radius
-  use ice_communicate,        only : my_task, master_task, MPI_COMM_ICE
+  use ice_communicate,        only : my_task, master_task, mpi_comm_ice
   use ice_calendar,           only : force_restart_now, write_ic
   use ice_calendar,           only : idate, mday, time, month, daycal, time2sec, year_init
   use ice_calendar,           only : sec, dt, calendar, calendar_type, nextsw_cday, istep
@@ -59,7 +59,7 @@ module ice_comp_nuopc
   use ice_therm_shared,       only : ktherm
   use ice_restart_shared,     only : runid, runtype, restart_dir, restart_file
   use ice_history,            only : accum_hist
-  use ice_history_shared,     only : model_doi_url
+  use ice_history_shared,     only : model_doi_url  ! TODO: add this functionality
   use ice_prescribed_mod,     only : ice_prescribed_init
   use ice_atmo,               only : flux_convergence_tolerance, flux_convergence_max_iteration
   use ice_atmo,               only : use_coldair_outbreak_mod
@@ -67,6 +67,7 @@ module ice_comp_nuopc
   use CICE_RunMod,            only : CICE_Run
   use perf_mod,               only : t_startf, t_stopf, t_barrierf
   use ice_timers
+  use mct_mod ! TODO: remove this
 
   implicit none
 
@@ -336,8 +337,6 @@ contains
 
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
 
-    use mct_mod ! TODO: remove this
-
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState
@@ -377,10 +376,8 @@ contains
     integer                   :: lmpicom
     integer                   :: shrlogunit    ! original log unit
     integer                   :: shrloglev     ! original log level
-    logical                   :: connected     ! is field connected?
     integer                   :: n,c,g,i,j,m   ! indices
     character(len=cs)         :: starttype     ! infodata start type
-    character(len=cl)         :: caseid        ! case ID
     integer                   :: lsize         ! local size of coupling array
     character(len=512)        :: diro
     character(len=512)        :: logfile
@@ -914,7 +911,7 @@ contains
     !--------------------------------
 
     call ice_timer_start(timer_total) ! time entire run
-    call t_barrierf('cice_run_total_BARRIER',MPI_COMM_ICE)
+    call t_barrierf('cice_run_total_BARRIER',mpi_comm_ice)
     call t_startf ('cice_run_total')
 
     !--------------------------------
@@ -973,7 +970,7 @@ contains
     ! Unpack import state
     !--------------------------------
 
-    call t_barrierf('cice_run_import_BARRIER',MPI_COMM_ICE)
+    call t_barrierf('cice_run_import_BARRIER',mpi_comm_ice)
     call t_startf ('cice_run_import')
     call ice_timer_start(timer_cplrecv)
 
@@ -1052,7 +1049,7 @@ contains
     ! Create export state
     !--------------------------------
 
-    call t_barrierf('cice_run_export_BARRIER',MPI_COMM_ICE)
+    call t_barrierf('cice_run_export_BARRIER',mpi_comm_ice)
     call t_startf ('cice_run_export')
     call ice_timer_start(timer_cplsend)
 
@@ -1261,9 +1258,6 @@ contains
 
   subroutine ice_set_domain(  mpicom, gsmap_i, dom_i )
 
-    use shr_flds_mod, only : shr_flds_dom_coord, shr_flds_dom_other
-    use mct_mod
-
     ! Arguments
     integer        , intent(in)    :: mpicom
     type(mct_gsMap), intent(in)    :: gsMap_i
@@ -1283,8 +1277,8 @@ contains
 
     lsize = mct_gsMap_lsize(gsmap_i, mpicom)
 
-    call mct_gGrid_init( GGrid=dom_i, &
-         CoordChars=trim(shr_flds_dom_coord), OtherChars=trim(shr_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init(GGrid=dom_i, &
+         CoordChars='lat:lon:hgt', OtherChars='area:aream:mask:frac', lsize=lsize )
     call mct_aVect_zero(dom_i%data)
 
     ! Determine global gridpoint number attribute, GlobGridNum, which is set automatically by MCT
@@ -1404,8 +1398,6 @@ contains
   !=======================================================================
 
   subroutine ice_set_gsmap( mpicom, ID, gsMap_ice)
-
-    use mct_mod
 
     ! Arguments
     integer        , intent(in)    :: mpicom
