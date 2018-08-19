@@ -34,7 +34,7 @@ module ice_import_export
   use ice_prescribed_mod
   use ice_cpl_indices
   use ice_communicate , only: my_task, master_task, MPI_COMM_ICE
-  use ice_calendar    , only: istep
+  use ice_calendar    , only: istep, istep1
   use perf_mod        , only: t_startf, t_stopf, t_barrierf
 
   implicit none
@@ -385,51 +385,51 @@ contains
           do j = jlo, jhi
              do i = ilo, ihi
                 n = n+1
-                write(nu_diag,F01)'import: istep, n, So_dhdx       = ',istep,n,x2i(index_x2i_So_dhdx,n)
-                write(nu_diag,F01)'import: istep, n, So_dhdy       = ',istep,n,x2i(index_x2i_So_dhdy,n)
-                write(nu_diag,F01)'import: istep, n, So_t          = ',istep,n,x2i(index_x2i_So_t,n)
-                write(nu_diag,F01)'import: istep, n, So_s          = ',istep,n,x2i(index_x2i_So_s,n)
-                write(nu_diag,F01)'import: istep, n, So_u          = ',istep,n,x2i(index_x2i_So_u,n)
-                write(nu_diag,F01)'import: istep, n, So_v          = ',istep,n,x2i(index_x2i_So_v,n)
-                write(nu_diag,F01)'import: istep, n, Sa_u          = ',istep,n,x2i(index_x2i_Sa_u,n)
-                write(nu_diag,F01)'import: istep, n, Sa_v          = ',istep,n,x2i(index_x2i_Sa_v,n)
-                write(nu_diag,F01)'import: istep, n, Sa_z          = ',istep,n,x2i(index_x2i_Sa_z,n)
-                write(nu_diag,F01)'import: istep, n, Sa_ptem       = ',istep,n,x2i(index_x2i_Sa_ptem,n)
-                write(nu_diag,F01)'import: istep, n, Sa_tbot       = ',istep,n,x2i(index_x2i_Sa_tbot,n)
-                write(nu_diag,F01)'import: istep, n, Sa_shum       = ',istep,n,x2i(index_x2i_Sa_shum,n)
-                write(nu_diag,F01)'import: istep, n, Sa_dens       = ',istep,n,x2i(index_x2i_Sa_dens,n)
-                write(nu_diag,F01)'import: istep, n, Fioo_q        = ',istep,n,x2i(index_x2i_Fioo_q,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swvdr    = ',istep,n,x2i(index_x2i_Faxa_swvdr,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swndr    = ',istep,n,x2i(index_x2i_Faxa_swndr,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swvdf    = ',istep,n,x2i(index_x2i_Faxa_swvdf,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swndf    = ',istep,n,x2i(index_x2i_Faxa_swndf,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_lwdn     = ',istep,n,x2i(index_x2i_Faxa_lwdn,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_rain     = ',istep,n,x2i(index_x2i_Faxa_rain,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_snow     = ',istep,n,x2i(index_x2i_Faxa_snow,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_bcphodry = ',istep,n,x2i(index_x2i_Faxa_bcphodry,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_bcphidry = ',istep,n,x2i(index_x2i_Faxa_bcphidry,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_bcphiwet = ',istep,n,x2i(index_x2i_Faxa_bcphiwet,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet1  = ',istep,n,x2i(index_x2i_Faxa_dstwet1,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry1  = ',istep,n,x2i(index_x2i_Faxa_dstdry1,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet2  = ',istep,n,x2i(index_x2i_Faxa_dstwet2,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry2  = ',istep,n,x2i(index_x2i_Faxa_dstdry2,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet3  = ',istep,n,x2i(index_x2i_Faxa_dstwet3,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry3  = ',istep,n,x2i(index_x2i_Faxa_dstdry3,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet4  = ',istep,n,x2i(index_x2i_Faxa_dstwet4,n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry4  = ',istep,n,x2i(index_x2i_Faxa_dstdry4,n)
+                write(nu_diag,F01)'import: istep, n, So_dhdx       = ',istep1,n,x2i(index_x2i_So_dhdx,n)
+                write(nu_diag,F01)'import: istep, n, So_dhdy       = ',istep1,n,x2i(index_x2i_So_dhdy,n)
+                write(nu_diag,F01)'import: istep, n, So_t          = ',istep1,n,x2i(index_x2i_So_t,n)
+                write(nu_diag,F01)'import: istep, n, So_s          = ',istep1,n,x2i(index_x2i_So_s,n)
+                write(nu_diag,F01)'import: istep, n, So_u          = ',istep1,n,x2i(index_x2i_So_u,n)
+                write(nu_diag,F01)'import: istep, n, So_v          = ',istep1,n,x2i(index_x2i_So_v,n)
+                write(nu_diag,F01)'import: istep, n, Sa_u          = ',istep1,n,x2i(index_x2i_Sa_u,n)
+                write(nu_diag,F01)'import: istep, n, Sa_v          = ',istep1,n,x2i(index_x2i_Sa_v,n)
+                write(nu_diag,F01)'import: istep, n, Sa_z          = ',istep1,n,x2i(index_x2i_Sa_z,n)
+                write(nu_diag,F01)'import: istep, n, Sa_ptem       = ',istep1,n,x2i(index_x2i_Sa_ptem,n)
+                write(nu_diag,F01)'import: istep, n, Sa_tbot       = ',istep1,n,x2i(index_x2i_Sa_tbot,n)
+                write(nu_diag,F01)'import: istep, n, Sa_shum       = ',istep1,n,x2i(index_x2i_Sa_shum,n)
+                write(nu_diag,F01)'import: istep, n, Sa_dens       = ',istep1,n,x2i(index_x2i_Sa_dens,n)
+                write(nu_diag,F01)'import: istep, n, Fioo_q        = ',istep1,n,x2i(index_x2i_Fioo_q,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swvdr    = ',istep1,n,x2i(index_x2i_Faxa_swvdr,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swndr    = ',istep1,n,x2i(index_x2i_Faxa_swndr,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swvdf    = ',istep1,n,x2i(index_x2i_Faxa_swvdf,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_swndf    = ',istep1,n,x2i(index_x2i_Faxa_swndf,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_lwdn     = ',istep1,n,x2i(index_x2i_Faxa_lwdn,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_rain     = ',istep1,n,x2i(index_x2i_Faxa_rain,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_snow     = ',istep1,n,x2i(index_x2i_Faxa_snow,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_bcphodry = ',istep1,n,x2i(index_x2i_Faxa_bcphodry,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_bcphidry = ',istep1,n,x2i(index_x2i_Faxa_bcphidry,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_bcphiwet = ',istep1,n,x2i(index_x2i_Faxa_bcphiwet,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet1  = ',istep1,n,x2i(index_x2i_Faxa_dstwet1,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry1  = ',istep1,n,x2i(index_x2i_Faxa_dstdry1,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet2  = ',istep1,n,x2i(index_x2i_Faxa_dstwet2,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry2  = ',istep1,n,x2i(index_x2i_Faxa_dstdry2,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet3  = ',istep1,n,x2i(index_x2i_Faxa_dstwet3,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry3  = ',istep1,n,x2i(index_x2i_Faxa_dstdry3,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstwet4  = ',istep1,n,x2i(index_x2i_Faxa_dstwet4,n)
+                write(nu_diag,F01)'import: istep, n, Faxa_dstdry4  = ',istep1,n,x2i(index_x2i_Faxa_dstdry4,n)
                 if (index_x2i_Sa_shum_HDO > 0) then
-                   write(nu_diag,F01)'import: istep, n, Sa_shum_HDO   = ',istep,n,x2i(index_x2i_Sa_shum_HDO,n)
-                   write(nu_diag,F01)'import: istep, n, Sa_shum_16O   = ',istep,n,x2i(index_x2i_Sa_shum_16O,n)
-                   write(nu_diag,F01)'import: istep, n, Sa_shum_18O   = ',istep,n,x2i(index_x2i_Sa_shum_18O,n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_rain_HDO = ',istep,n,x2i(index_x2i_Faxa_rain_HDO,n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_rain_16O = ',istep,n,x2i(index_x2i_Faxa_rain_16O,n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_rain_18O = ',istep,n,x2i(index_x2i_Faxa_rain_18O,n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_snow_HDO = ',istep,n,x2i(index_x2i_Faxa_snow_HDO,n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_snow_16O = ',istep,n,x2i(index_x2i_Faxa_snow_16O,n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_snow_18O = ',istep,n,x2i(index_x2i_Faxa_snow_18O,n)
-                   write(nu_diag,F01)'import: istep, n, So_roce_HDO   = ',istep,n,x2i(index_x2i_So_roce_HDO,n)
-                   write(nu_diag,F01)'import: istep, n, So_roce_16O   = ',istep,n,x2i(index_x2i_So_roce_16O,n)
-                   write(nu_diag,F01)'import: istep, n, So_roce_18O   = ',istep,n,x2i(index_x2i_So_roce_18O,n)
+                   write(nu_diag,F01)'import: istep, n, Sa_shum_HDO   = ',istep1,n,x2i(index_x2i_Sa_shum_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, Sa_shum_16O   = ',istep1,n,x2i(index_x2i_Sa_shum_16O,n)
+                   write(nu_diag,F01)'import: istep, n, Sa_shum_18O   = ',istep1,n,x2i(index_x2i_Sa_shum_18O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_rain_HDO = ',istep1,n,x2i(index_x2i_Faxa_rain_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_rain_16O = ',istep1,n,x2i(index_x2i_Faxa_rain_16O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_rain_18O = ',istep1,n,x2i(index_x2i_Faxa_rain_18O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_snow_HDO = ',istep1,n,x2i(index_x2i_Faxa_snow_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_snow_16O = ',istep1,n,x2i(index_x2i_Faxa_snow_16O,n)
+                   write(nu_diag,F01)'import: istep, n, Faxa_snow_18O = ',istep1,n,x2i(index_x2i_Faxa_snow_18O,n)
+                   write(nu_diag,F01)'import: istep, n, So_roce_HDO   = ',istep1,n,x2i(index_x2i_So_roce_HDO,n)
+                   write(nu_diag,F01)'import: istep, n, So_roce_16O   = ',istep1,n,x2i(index_x2i_So_roce_16O,n)
+                   write(nu_diag,F01)'import: istep, n, So_roce_18O   = ',istep1,n,x2i(index_x2i_So_roce_18O,n)
                 end if
              end do
           end do
@@ -503,18 +503,14 @@ contains
              ! wind stress  (on POP T-grid:  convert to lat-lon)
              workx = strairxT(i,j,iblk)                             ! N/m^2
              worky = strairyT(i,j,iblk)                             ! N/m^2
-             tauxa(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) &
-                             - worky*sin(ANGLET(i,j,iblk))
-             tauya(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) &
-                             + workx*sin(ANGLET(i,j,iblk))
+             tauxa(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) - worky*sin(ANGLET(i,j,iblk))
+             tauya(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) + workx*sin(ANGLET(i,j,iblk))
 
              ! ice/ocean stress (on POP T-grid:  convert to lat-lon)
              workx = -strocnxT(i,j,iblk)                            ! N/m^2
              worky = -strocnyT(i,j,iblk)                            ! N/m^2
-             tauxo(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) &
-                             - worky*sin(ANGLET(i,j,iblk))
-             tauyo(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) &
-                             + workx*sin(ANGLET(i,j,iblk))
+             tauxo(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) - worky*sin(ANGLET(i,j,iblk))
+             tauyo(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) + workx*sin(ANGLET(i,j,iblk))
 
           enddo
        enddo
@@ -702,55 +698,55 @@ contains
                 n = n+1
 
                 !--- ice states
-                write(nu_diag,F01)'export: istep, n, Si_ifrac   = ',istep,n,i2x(index_i2x_Si_ifrac ,n)
-                write(nu_diag,F01)'export: istep, n, Si_t       = ',istep,n,i2x(index_i2x_Si_t     ,n)
-                write(nu_diag,F01)'export: istep, n, Si_avsdr   = ',istep,n,i2x(index_i2x_Si_avsdr ,n)
-                write(nu_diag,F01)'export: istep, n, Si_anidr   = ',istep,n,i2x(index_i2x_Si_anidr ,n)
-                write(nu_diag,F01)'export: istep, n, Si_avsdf   = ',istep,n,i2x(index_i2x_Si_avsdf ,n)
-                write(nu_diag,F01)'export: istep, n, Si_anidf   = ',istep,n,i2x(index_i2x_Si_anidf ,n)
-                write(nu_diag,F01)'export: istep, n, Si_u10     = ',istep,n,i2x(index_i2x_Si_u10   ,n)
-                write(nu_diag,F01)'export: istep, n, Si_tref    = ',istep,n,i2x(index_i2x_Si_tref  ,n)
-                write(nu_diag,F01)'export: istep, n, Si_qref    = ',istep,n,i2x(index_i2x_Si_qref  ,n)
-                write(nu_diag,F01)'export: istep, n, Si_snowh   = ',istep,n,i2x(index_i2x_Si_snowh ,n)
+                write(nu_diag,F01)'export: istep, n, Si_ifrac   = ',istep1,n,i2x(index_i2x_Si_ifrac ,n)
+                write(nu_diag,F01)'export: istep, n, Si_t       = ',istep1,n,i2x(index_i2x_Si_t     ,n)
+                write(nu_diag,F01)'export: istep, n, Si_avsdr   = ',istep1,n,i2x(index_i2x_Si_avsdr ,n)
+                write(nu_diag,F01)'export: istep, n, Si_anidr   = ',istep1,n,i2x(index_i2x_Si_anidr ,n)
+                write(nu_diag,F01)'export: istep, n, Si_avsdf   = ',istep1,n,i2x(index_i2x_Si_avsdf ,n)
+                write(nu_diag,F01)'export: istep, n, Si_anidf   = ',istep1,n,i2x(index_i2x_Si_anidf ,n)
+                write(nu_diag,F01)'export: istep, n, Si_u10     = ',istep1,n,i2x(index_i2x_Si_u10   ,n)
+                write(nu_diag,F01)'export: istep, n, Si_tref    = ',istep1,n,i2x(index_i2x_Si_tref  ,n)
+                write(nu_diag,F01)'export: istep, n, Si_qref    = ',istep1,n,i2x(index_i2x_Si_qref  ,n)
+                write(nu_diag,F01)'export: istep, n, Si_snowh   = ',istep1,n,i2x(index_i2x_Si_snowh ,n)
                 if (index_i2x_Si_logz0 > 0) then
-                   write(nu_diag,F01)'export: istep, n, Si_logz0= ',istep,n, i2x(index_i2x_Si_logz0 ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_logz0= ',istep1,n, i2x(index_i2x_Si_logz0 ,n)
                 end if
 
                 !--- a/i fluxes computed by ice
-                write(nu_diag,F01)'export: istep, n, Faii_taux  = ',istep,n,i2x(index_i2x_Faii_taux ,n)
-                write(nu_diag,F01)'export: istep, n, Faii_tauy  = ',istep,n,i2x(index_i2x_Faii_tauy ,n)
-                write(nu_diag,F01)'export: istep, n, Faii_lat   = ',istep,n,i2x(index_i2x_Faii_lat  ,n)
-                write(nu_diag,F01)'export: istep, n, Faii_sen   = ',istep,n,i2x(index_i2x_Faii_sen  ,n)
-                write(nu_diag,F01)'export: istep, n, Faii_lwup  = ',istep,n,i2x(index_i2x_Faii_lwup ,n)
-                write(nu_diag,F01)'export: istep, n, Faii_evap  = ',istep,n,i2x(index_i2x_Faii_evap ,n)
-                write(nu_diag,F01)'export: istep, n, Faii_swnet = ',istep,n,i2x(index_i2x_Faii_swnet,n)
+                write(nu_diag,F01)'export: istep, n, Faii_taux  = ',istep1,n,i2x(index_i2x_Faii_taux ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_tauy  = ',istep1,n,i2x(index_i2x_Faii_tauy ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_lat   = ',istep1,n,i2x(index_i2x_Faii_lat  ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_sen   = ',istep1,n,i2x(index_i2x_Faii_sen  ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_lwup  = ',istep1,n,i2x(index_i2x_Faii_lwup ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_evap  = ',istep1,n,i2x(index_i2x_Faii_evap ,n)
+                write(nu_diag,F01)'export: istep, n, Faii_swnet = ',istep1,n,i2x(index_i2x_Faii_swnet,n)
 
                 !--- i/o fluxes computed by ice
-                write(nu_diag,F01)'export: istep, n, Fioi_melth = ',istep,n,i2x(index_i2x_Fioi_melth,n)
-                write(nu_diag,F01)'export: istep, n, Fioi_swpen = ',istep,n,i2x(index_i2x_Fioi_swpen,n)
-                write(nu_diag,F01)'export: istep, n, Fioi_meltw = ',istep,n,i2x(index_i2x_Fioi_meltw,n)
-                write(nu_diag,F01)'export: istep, n, Fioi_salt  = ',istep,n,i2x(index_i2x_Fioi_salt ,n)
-                write(nu_diag,F01)'export: istep, n, Fioi_taux  = ',istep,n,i2x(index_i2x_Fioi_taux ,n)
-                write(nu_diag,F01)'export: istep, n, Fioi_tauy  = ',istep,n,i2x(index_i2x_Fioi_tauy ,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_melth = ',istep1,n,i2x(index_i2x_Fioi_melth,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_swpen = ',istep1,n,i2x(index_i2x_Fioi_swpen,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_meltw = ',istep1,n,i2x(index_i2x_Fioi_meltw,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_salt  = ',istep1,n,i2x(index_i2x_Fioi_salt ,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_taux  = ',istep1,n,i2x(index_i2x_Fioi_taux ,n)
+                write(nu_diag,F01)'export: istep, n, Fioi_tauy  = ',istep1,n,i2x(index_i2x_Fioi_tauy ,n)
                 if (index_i2x_Fioi_bcpho > 0) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_bcpho  = ',istep,n,i2x(index_i2x_Fioi_bcpho ,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_bcpho  = ',istep1,n,i2x(index_i2x_Fioi_bcpho ,n)
                 end if
                 if (index_i2x_Fioi_bcphi > 0) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_bcphi  = ',istep,n,i2x(index_i2x_Fioi_bcpho ,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_bcphi  = ',istep1,n,i2x(index_i2x_Fioi_bcpho ,n)
                 end if
                 if (index_i2x_Fioi_flxdst > 0) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_flxdst = ',istep,n,i2x(index_i2x_Fioi_flxdst,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_flxdst = ',istep1,n,i2x(index_i2x_Fioi_flxdst,n)
                 end if
                 if (index_i2x_Fioi_meltw_HDO > 0) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_HDO      = ',istep,n,i2x(index_i2x_Fioi_meltw_HDO,n)
-                   write(nu_diag,F01)'export: istep, n, Fioi_16O      = ',istep,n,i2x(index_i2x_Fioi_meltw_16O,n)
-                   write(nu_diag,F01)'export: istep, n, Fioi_18O      = ',istep,n,i2x(index_i2x_Fioi_meltw_18O,n)
-                   write(nu_diag,F01)'export: istep, n, Faii_evap_HDO = ',istep,n,i2x(index_i2x_Faii_evap_HDO ,n)
-                   write(nu_diag,F01)'export: istep, n, Faii_evap_16O = ',istep,n,i2x(index_i2x_Faii_evap_16O ,n)
-                   write(nu_diag,F01)'export: istep, n, Faii_evap_18O = ',istep,n,i2x(index_i2x_Faii_evap_18O ,n)
-                   write(nu_diag,F01)'export: istep, n, Si_qref_HDO   = ',istep,n,i2x(index_i2x_Si_qref_HDO   ,n)
-                   write(nu_diag,F01)'export: istep, n, Si_qref_16O   = ',istep,n,i2x(index_i2x_Si_qref_16O   ,n)
-                   write(nu_diag,F01)'export: istep, n, Si_qref_18O   = ',istep,n,i2x(index_i2x_Si_qref_18O   ,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_HDO      = ',istep1,n,i2x(index_i2x_Fioi_meltw_HDO,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_16O      = ',istep1,n,i2x(index_i2x_Fioi_meltw_16O,n)
+                   write(nu_diag,F01)'export: istep, n, Fioi_18O      = ',istep1,n,i2x(index_i2x_Fioi_meltw_18O,n)
+                   write(nu_diag,F01)'export: istep, n, Faii_evap_HDO = ',istep1,n,i2x(index_i2x_Faii_evap_HDO ,n)
+                   write(nu_diag,F01)'export: istep, n, Faii_evap_16O = ',istep1,n,i2x(index_i2x_Faii_evap_16O ,n)
+                   write(nu_diag,F01)'export: istep, n, Faii_evap_18O = ',istep1,n,i2x(index_i2x_Faii_evap_18O ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_qref_HDO   = ',istep1,n,i2x(index_i2x_Si_qref_HDO   ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_qref_16O   = ',istep1,n,i2x(index_i2x_Si_qref_16O   ,n)
+                   write(nu_diag,F01)'export: istep, n, Si_qref_18O   = ',istep1,n,i2x(index_i2x_Si_qref_18O   ,n)
                 end if
              end do
           end do

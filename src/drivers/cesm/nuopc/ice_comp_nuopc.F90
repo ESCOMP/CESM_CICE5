@@ -40,7 +40,7 @@ module ice_comp_nuopc
   use shr_nuopc_grid_mod    , only : shr_nuopc_grid_StateToArray
   use shr_nuopc_time_mod    , only : shr_nuopc_time_AlarmInit
 
-  use ice_cpl_indices,        only : ice_cpl_indices_set 
+  use ice_cpl_indices,        only : ice_cpl_indices_set
   use ice_import_export,      only : ice_import, ice_export
   use ice_domain_size,        only : nx_global, ny_global, block_size_x, block_size_y, max_blocks
   use ice_domain,             only : nblocks, blocks_ice
@@ -388,7 +388,7 @@ contains
     integer                   :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
     type(block)               :: this_block         ! block information for current block
     integer                   :: compid             ! component id
-    logical                   :: flds_i2o_per_cat   ! .true. => select per ice thickness category 
+    logical                   :: flds_i2o_per_cat   ! .true. => select per ice thickness category
                                                     ! fields passed from ice to ocn
     character(*), parameter   :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
@@ -613,7 +613,6 @@ contains
     call t_stopf ('cice_init')
 
     ! Now write output to nu_diag - this must happen AFTER call to cice_init
-
     if (localPet == 0) then
        write(nu_diag,F00) trim(subname),' cice init nextsw_cday = ',nextsw_cday
        write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
