@@ -21,8 +21,7 @@ module ice_comp_mct
   use esmf, only: ESMF_clock, ESMF_time, ESMF_ClockGet, ESMF_TimeGet
 #endif
 
-  use shr_flds_mod,    only : shr_flds_dom_coord, shr_flds_dom_other
-  use seq_flds_mod,    only : seq_flds_x2i_fields, seq_flds_i2x_fields, seq_flds_i2o_per_cat
+  use seq_flds_mod
   use seq_cdata_mod,   only : seq_cdata, seq_cdata_setptrs
   use seq_infodata_mod,only : seq_infodata_type, seq_infodata_getdata,       &
 		              seq_infodata_putdata, seq_infodata_start_type_cont, &
@@ -174,7 +173,7 @@ contains
     ! Determine attribute vector indices
     !--------------------------------------------------------------------------
 
-    call ice_cpl_indices_set(seq_flds_x2i_fields, seq_flds_i2x_fields, seq_flds_i2o_per_cat)
+    call ice_cpl_indices_set()
 
     !---------------------------------------------------------------------------
     ! Set cdata pointers
@@ -225,10 +224,12 @@ contains
     if (trim(runtype) /= 'initial') then
        nextsw_cday = -1
     else
-       ! TODO NUOPC: The following was the initial implementation - and is replaced by the nuopc implementation below
-       ! *** call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday ) ***
+       ! TODO: need to figure out a way to turn initial implementation back on
+       ! The following was the initial implementation 
+       ! call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
        call ESMF_ClockGet( Eclock, currTime=currTime, rc=rc )
        if ( rc /= ESMF_SUCCESS ) call shr_sys_abort('ice_ERROR: ice_comp_mct for ESMF_CLockGet inquiry')
+       ! For NUOPC comparison its replaced by the call below
        call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
        if ( rc /= ESMF_SUCCESS ) call shr_sys_abort('ERROR: ice_comp_mct for ESMF_TimeGet inquiry')
     end if
@@ -254,9 +255,13 @@ contains
 
     call seq_infodata_GetData(infodata, tfreeze_option=tfrz_option )
 
-    !=============================================================
-    ! Write diagnostic output - must happen AFTER call to cice_init
-    !=============================================================
+    if (my_task == master_task) then
+       write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
+       if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
+          write(nu_diag,*) trim(subname),' Warning: Using ktherm = 2 and tfrz_option = ', &
+                           trim(tfrz_option)
+       endif
+    endif
 
     ! atmice flux calculation
     call seq_infodata_GetData(infodata, &
@@ -265,11 +270,6 @@ contains
          flux_max_iteration=flux_convergence_max_iteration)
 
     if (my_task == master_task) then
-       write(nu_diag,*) trim(subname),' cice init nextsw_cday = ',nextsw_cday
-       write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
-       if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
-          write(nu_diag,*) trim(subname),' Warning: Using ktherm = 2 and tfrz_option = ', trim(tfrz_option)
-       endif
        write(nu_diag,*) trim(subname),' inst_name   = ',trim(inst_name)
        write(nu_diag,*) trim(subname),' inst_index  = ',inst_index
        write(nu_diag,*) trim(subname),' inst_suffix = ',trim(inst_suffix)
@@ -793,8 +793,7 @@ contains
     ! Initialize mct domain type
     ! lat/lon in degrees,  area in radians^2, mask is 1 (ocean), 0 (non-ocean)
     !
-    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(shr_flds_dom_coord), &
-       OtherChars=trim(shr_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init(GGrid=dom_i, CoordChars='lat:lon:hgt', OtherChars='area:aream:mask:frac', lsize=lsize )
     call mct_aVect_zero(dom_i%data)
     !
     allocate(data(lsize))
@@ -1117,8 +1116,7 @@ contains
     deallocate(start,length,pe_loc)
 
     lsize = mct_gsmap_lsize(gsmap_i,mpicom_i)
-    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(shr_flds_dom_coord), &
-       OtherChars=trim(shr_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init(GGrid=dom_i, CoordChars='lat:lon:hgt', OtherChars='area:aream:mask:frac', lsize=lsize )
     call mct_aVect_zero(dom_i%data)
 
     ! Determine global gridpoint number attribute, GlobGridNum, which is set automatically by MCT
