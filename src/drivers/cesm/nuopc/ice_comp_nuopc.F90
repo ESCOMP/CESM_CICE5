@@ -582,7 +582,6 @@ contains
     call t_stopf ('cice_init')
 
     ! Now write output to nu_diag - this must happen AFTER call to cice_init
-
     if (localPet == 0) then
        write(nu_diag,F00) trim(subname),' cice init nextsw_cday = ',nextsw_cday
        write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
