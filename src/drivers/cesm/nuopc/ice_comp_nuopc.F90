@@ -40,7 +40,7 @@ module ice_comp_nuopc
   use shr_nuopc_grid_mod    , only : shr_nuopc_grid_StateToArray
   use shr_nuopc_time_mod    , only : shr_nuopc_time_AlarmInit
 
-  use ice_cpl_indices,        only : ice_cpl_indices_set 
+  use ice_cpl_indices,        only : ice_cpl_indices_set
   use ice_import_export,      only : ice_import, ice_export
   use ice_domain_size,        only : nx_global, ny_global, block_size_x, block_size_y, max_blocks
   use ice_domain,             only : nblocks, blocks_ice
@@ -188,7 +188,7 @@ contains
   !===============================================================================
 
   subroutine InitializeAdvertise(gcomp, importState, exportState, clock, rc)
-
+    use shr_nuopc_utils_mod    , only : shr_nuopc_set_component_logging, shr_nuopc_get_component_instance
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState, exportState
@@ -336,7 +336,7 @@ contains
   !===============================================================================
 
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
-
+    use shr_nuopc_utils_mod, only: shr_nuopc_set_component_logging,shr_nuopc_get_component_instance
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState
@@ -388,7 +388,7 @@ contains
     integer                   :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
     type(block)               :: this_block         ! block information for current block
     integer                   :: compid             ! component id
-    logical                   :: flds_i2o_per_cat   ! .true. => select per ice thickness category 
+    logical                   :: flds_i2o_per_cat   ! .true. => select per ice thickness category
                                                     ! fields passed from ice to ocn
     character(*), parameter   :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
@@ -415,25 +415,8 @@ contains
     ! determine instance information - first get compid
     !----------------------------------------------------------------------------
 
-    call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) compid  ! convert from string to integer
-
-    call NUOPC_CompAttributeGet(gcomp, name="inst_name", value=inst_name, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call NUOPC_CompAttributeGet(gcomp, name="inst_index", value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) inst_index
-
-    call ESMF_AttributeGet(gcomp, name="inst_suffix", isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name="inst_suffix", value=inst_suffix, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    else
-       inst_suffix = ''
-    end if
+    call shr_nuopc_get_component_instance(gcomp, inst_suffix, inst_index)
+    inst_name = "ICE"//trim(inst_suffix)
 
     !----------------------------------------------------------------------------
     ! reset shr logging to my log file
@@ -443,21 +426,7 @@ contains
     ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
     ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
 
-    if (localPet == 0) then
-       call NUOPC_CompAttributeGet(gcomp, name="diro", value=diro, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call NUOPC_CompAttributeGet(gcomp, name="logfile", value=logfile, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       nu_diag = shr_file_getUnit()
-       open(nu_diag,file=trim(diro)//"/"//trim(logfile))
-    else
-       nu_diag = 6
-    endif
-
-    call shr_file_getLogUnit (shrlogunit)
-    call shr_file_getLogLevel(shrloglev)
-    call shr_file_setLogLevel(max(shrloglev,1))
-    call shr_file_setLogUnit (nu_diag)
+    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, shrloglev)
 
     !----------------------------------------------------------------------------
     ! start cice timers
