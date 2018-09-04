@@ -730,8 +730,8 @@ contains
              ilon = this_block%i_glob(i)
              jlat = this_block%j_glob(j)
              gindex(n) = (jlat-1)*nx_global + ilon
-             lon(n) = TLON(ilon,jlat,iblk)*rad_to_deg
-             lat(n) = TLAT(ilon,jlat,iblk)*rad_to_deg
+             lon(n) = TLON(i,j,iblk)*rad_to_deg
+             lat(n) = TLAT(i,j,iblk)*rad_to_deg
           enddo
        enddo
     enddo
