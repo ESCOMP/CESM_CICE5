@@ -412,7 +412,7 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
-    ! determine instance information - first get compid
+    ! determine instance information
     !----------------------------------------------------------------------------
 
     call shr_nuopc_get_component_instance(gcomp, inst_suffix, inst_index)
@@ -761,8 +761,11 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------
-    ! Prescribed ice initialization
+    ! Prescribed ice initialization - first get compid
     !-----------------------------------------------------------------
+    call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) compid  ! convert from string to integer
 
     call ice_set_gsmap( lmpicom, compid, gsmap_ice )
     call ice_set_domain( lmpicom, gsmap_ice, dom_ice )
