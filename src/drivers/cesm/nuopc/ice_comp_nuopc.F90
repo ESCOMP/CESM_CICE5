@@ -188,7 +188,7 @@ contains
   !===============================================================================
 
   subroutine InitializeAdvertise(gcomp, importState, exportState, clock, rc)
-
+    use shr_nuopc_utils_mod    , only : shr_nuopc_set_component_logging, shr_nuopc_get_component_instance
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState, exportState
@@ -336,7 +336,7 @@ contains
   !===============================================================================
 
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
-
+    use shr_nuopc_utils_mod, only: shr_nuopc_set_component_logging,shr_nuopc_get_component_instance
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState
@@ -412,28 +412,11 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
-    ! determine instance information - first get compid
+    ! determine instance information
     !----------------------------------------------------------------------------
 
-    call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) compid  ! convert from string to integer
-
-    call NUOPC_CompAttributeGet(gcomp, name="inst_name", value=inst_name, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call NUOPC_CompAttributeGet(gcomp, name="inst_index", value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) inst_index
-
-    call ESMF_AttributeGet(gcomp, name="inst_suffix", isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name="inst_suffix", value=inst_suffix, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    else
-       inst_suffix = ''
-    end if
+    call shr_nuopc_get_component_instance(gcomp, inst_suffix, inst_index)
+    inst_name = "ICE"//trim(inst_suffix)
 
     !----------------------------------------------------------------------------
     ! reset shr logging to my log file
@@ -443,21 +426,7 @@ contains
     ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
     ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
 
-    if (localPet == 0) then
-       call NUOPC_CompAttributeGet(gcomp, name="diro", value=diro, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call NUOPC_CompAttributeGet(gcomp, name="logfile", value=logfile, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       nu_diag = shr_file_getUnit()
-       open(nu_diag,file=trim(diro)//"/"//trim(logfile))
-    else
-       nu_diag = 6
-    endif
-
-    call shr_file_getLogUnit (shrlogunit)
-    call shr_file_getLogLevel(shrloglev)
-    call shr_file_setLogLevel(max(shrloglev,1))
-    call shr_file_setLogUnit (nu_diag)
+    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, shrloglev)
 
     !----------------------------------------------------------------------------
     ! start cice timers
@@ -792,8 +761,11 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------
-    ! Prescribed ice initialization
+    ! Prescribed ice initialization - first get compid
     !-----------------------------------------------------------------
+    call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) compid  ! convert from string to integer
 
     call ice_set_gsmap( lmpicom, compid, gsmap_ice )
     call ice_set_domain( lmpicom, gsmap_ice, dom_ice )
