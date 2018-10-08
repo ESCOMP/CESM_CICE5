@@ -698,6 +698,7 @@ contains
                 n = n+1
 
                 !--- ice states
+                write(nu_diag,F01)'export: istep, n, Si_imask   = ',istep1,n,i2x(index_i2x_Si_imask ,n)
                 write(nu_diag,F01)'export: istep, n, Si_ifrac   = ',istep1,n,i2x(index_i2x_Si_ifrac ,n)
                 write(nu_diag,F01)'export: istep, n, Si_t       = ',istep1,n,i2x(index_i2x_Si_t     ,n)
                 write(nu_diag,F01)'export: istep, n, Si_avsdr   = ',istep1,n,i2x(index_i2x_Si_avsdr ,n)
