@@ -35,27 +35,26 @@ module ice_comp_nuopc
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_SetScalar
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_GetScalar
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_Diagnose
-  use shr_nuopc_grid_mod    , only : shr_nuopc_grid_Meshinit
   use shr_nuopc_grid_mod    , only : shr_nuopc_grid_ArrayToState
   use shr_nuopc_grid_mod    , only : shr_nuopc_grid_StateToArray
   use shr_nuopc_time_mod    , only : shr_nuopc_time_AlarmInit
 
   use ice_cpl_indices,        only : ice_cpl_indices_set
   use ice_import_export,      only : ice_import, ice_export
-  use ice_domain_size,        only : nx_global, ny_global, block_size_x, block_size_y, max_blocks
-  use ice_domain,             only : nblocks, blocks_ice
-  use ice_blocks,             only : block, get_block, nx_block, ny_block
-  use ice_grid,               only : tlon, tlat, tarea, hm, grid_type, gridcpl_file, ocn_gridcell_frac
-  use ice_constants,          only : rad_to_deg, radius
+  use ice_domain_size,        only : nx_global, ny_global
+  use ice_domain,             only : nblocks, blocks_ice, distrb_info
+  use ice_blocks,             only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
+  use ice_grid,               only : tlon, tlat 
+  use ice_constants,          only : rad_to_deg 
   use ice_communicate,        only : my_task, master_task, mpi_comm_ice
   use ice_calendar,           only : force_restart_now, write_ic
   use ice_calendar,           only : idate, mday, time, month, daycal, time2sec, year_init
   use ice_calendar,           only : sec, dt, calendar, calendar_type, nextsw_cday, istep
   use ice_orbital,            only : eccen, obliqr, lambm0, mvelpp
-  use ice_ocean,              only : tfrz_option
-  use ice_kinds_mod,          only : dbl_kind
+  use ice_kinds_mod,          only : dbl_kind, int_kind
   use ice_scam,               only : scmlat, scmlon, single_column
   use ice_fileunits,          only : nu_diag, ice_stdout, inst_index, inst_name, inst_suffix, release_all_fileunits
+  use ice_ocean,              only : tfrz_option
   use ice_therm_shared,       only : ktherm
   use ice_restart_shared,     only : runid, runtype, restart_dir, restart_file
   use ice_history,            only : accum_hist
@@ -67,7 +66,6 @@ module ice_comp_nuopc
   use CICE_RunMod,            only : CICE_Run
   use perf_mod,               only : t_startf, t_stopf, t_barrierf
   use ice_timers
-  use mct_mod ! TODO: remove this
 
   implicit none
 
@@ -81,9 +79,6 @@ module ice_comp_nuopc
   private :: ModelFinalize
   private :: fld_list_add
   private :: fld_list_realize
-
-  private :: ice_set_domain
-  private :: ice_set_gsmap
 
   !--------------------------------------------------------------------------
   ! Private module data
@@ -345,57 +340,60 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    real(r8), pointer         :: lat(:)
-    real(r8), pointer         :: lon(:)
-    real(r8), pointer         :: elemCoords(:,:)
-    real(r8), pointer         :: elemCornerCoords(:,:,:)
-    integer , pointer         :: gindex(:)
-    real(r8)                  :: dx,dy
-    character(CL)             :: cvalue
-    character(ESMF_MAXSTR)    :: convCIM, purpComp
-    type(ESMF_VM)             :: vm
-    type(ESMF_Mesh)           :: Emesh
-    type(ESMF_Time)           :: currTime      ! Current time
-    type(ESMF_Time)           :: startTime     ! Start time
-    type(ESMF_Time)           :: stopTime      ! Stop time
-    type(ESMF_Time)           :: refTime       ! Ref time
-    type(ESMF_TimeInterval)   :: timeStep      ! Model timestep
-    type(ESMF_Calendar)       :: esmf_calendar ! esmf calendar
-    type(ESMF_CalKind_Flag)   :: esmf_caltype  ! esmf calendar type
-    integer                   :: start_ymd     ! Start date (YYYYMMDD)
-    integer                   :: start_tod     ! start time of day (s)
-    integer                   :: curr_ymd      ! Current date (YYYYMMDD)
-    integer                   :: curr_tod      ! Current time of day (s)
-    integer                   :: stop_ymd      ! stop date (YYYYMMDD)
-    integer                   :: stop_tod      ! stop time of day (sec)
-    integer                   :: ref_ymd       ! Reference date (YYYYMMDD)
-    integer                   :: ref_tod       ! reference time of day (s)
-    integer                   :: yy,mm,dd      ! Temporaries for time query
-    integer                   :: iyear         ! yyyy
-    integer                   :: dtime         ! time step
-    integer                   :: lmpicom
-    integer                   :: shrlogunit    ! original log unit
-    integer                   :: shrloglev     ! original log level
-    integer                   :: n,c,g,i,j,m   ! indices
-    character(len=cs)         :: starttype     ! infodata start type
-    integer                   :: lsize         ! local size of coupling array
-    character(len=512)        :: diro
-    character(len=512)        :: logfile
-    logical                   :: isPresent
-    integer                   :: localPet
-    integer                   :: dbrc
-    integer                   :: iblk, ilon, jlat   ! indices
-    integer                   :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
-    type(block)               :: this_block         ! block information for current block
-    integer                   :: compid             ! component id
-    logical                   :: flds_i2o_per_cat   ! .true. => select per ice thickness category
-                                                    ! fields passed from ice to ocn
-    character(*), parameter   :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
+    type(ESMF_DistGrid)               :: distGrid
+    type(ESMF_Mesh)                   :: Emesh, EmeshTemp
+    integer                           :: spatialDim
+    integer                           :: numOwnedElements
+    real(R8), pointer                 :: ownedElemCoords(:)
+    real(r8), pointer                 :: lat(:), latMesh(:)
+    real(r8), pointer                 :: lon(:), lonMesh(:)
+    integer , allocatable             :: gindex_ice(:)
+    integer , allocatable             :: gindex_lnd(:)
+    integer , allocatable             :: gindex(:)
+    integer                           :: nlnd,nice,globalID
+    character(CL)                     :: cvalue
+    character(ESMF_MAXSTR)            :: convCIM, purpComp
+    type(ESMF_VM)                     :: vm
+    type(ESMF_Time)                   :: currTime           ! Current time
+    type(ESMF_Time)                   :: startTime          ! Start time
+    type(ESMF_Time)                   :: stopTime           ! Stop time
+    type(ESMF_Time)                   :: refTime            ! Ref time
+    type(ESMF_TimeInterval)           :: timeStep           ! Model timestep
+    type(ESMF_Calendar)               :: esmf_calendar      ! esmf calendar
+    type(ESMF_CalKind_Flag)           :: esmf_caltype       ! esmf calendar type
+    integer                           :: start_ymd          ! Start date (YYYYMMDD)
+    integer                           :: start_tod          ! start time of day (s)
+    integer                           :: curr_ymd           ! Current date (YYYYMMDD)
+    integer                           :: curr_tod           ! Current time of day (s)
+    integer                           :: stop_ymd           ! stop date (YYYYMMDD)
+    integer                           :: stop_tod           ! stop time of day (sec)
+    integer                           :: ref_ymd            ! Reference date (YYYYMMDD)
+    integer                           :: ref_tod            ! reference time of day (s)
+    integer                           :: yy,mm,dd           ! Temporaries for time query
+    integer                           :: iyear              ! yyyy
+    integer                           :: dtime              ! time step
+    integer                           :: lmpicom
+    integer                           :: shrlogunit         ! original log unit
+    integer                           :: shrloglev          ! original log level
+    character(len=cs)                 :: starttype          ! infodata start type
+    integer                           :: lsize              ! local size of coupling array
+    character(len=512)                :: diro
+    character(len=512)                :: logfile
+    logical                           :: isPresent
+    integer                           :: localPet
+    integer                           :: dbrc
+    integer                           :: n,c,g,i,j,m        ! indices
+    integer                           :: iblk, jblk         ! indices
+    integer                           :: ig, jg             ! indices
+    integer                           :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
+    type(block)                       :: this_block         ! block information for current block
+    integer                           :: compid             ! component id
+    character(len=CL)                 :: tempc1,tempc2
+    real(R8)                          :: diff_lon
+    logical                           :: flds_i2o_per_cat   ! .true. => select per ice thickness category
+                                                            ! fields passed from ice to ocn
+    character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
-
-    ! TODO: remove these
-    type(mct_gGrid)           :: dom_ice
-    type(mct_gsMap)           :: gsmap_ice
     !--------------------------------
 
     rc = ESMF_SUCCESS
@@ -647,8 +645,6 @@ contains
           call time2sec(iyear-(year_init-1),month,mday,time)
        endif
        time = time+start_tod
-
-       call shr_sys_flush(nu_diag)
     end if
 
     call calendar(time)     ! update calendar info
@@ -657,14 +653,10 @@ contains
     end if
 
     !---------------------------------------------------------------------------
-    ! Initialize MCT attribute vectors and indices
-    !---------------------------------------------------------------------------
-
-    !---------------------------------------------------------------------------
     ! Generate the EMSF mesh
     !---------------------------------------------------------------------------
 
-    ! number the local grid to get allocation size for gindex
+    ! number the local grid to get allocation size for gindex_ice
     lsize = 0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
@@ -679,13 +671,8 @@ contains
        enddo
     enddo
 
-    allocate(gindex(lsize))
-    allocate(lon(lsize))
-    allocate(lat(lsize))
-    allocate(elemCoords(2,lsize))          ! (lon+lat) * n_gridcells
-    allocate(elemCornerCoords(2,4,lsize))  ! (lon+lat) * n_corners * n_gridcells
-
-    ! set gindex, lon and lat
+    ! set global index array
+    allocate(gindex_ice(lsize))
     n = 0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
@@ -694,47 +681,148 @@ contains
        jlo = this_block%jlo
        jhi = this_block%jhi
        do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             ilon = this_block%i_glob(i)
-             jlat = this_block%j_glob(j)
-             gindex(n) = (jlat-1)*nx_global + ilon
-             lon(n) = TLON(i,j,iblk)*rad_to_deg
-             lat(n) = TLAT(i,j,iblk)*rad_to_deg
-          enddo
+       do i = ilo, ihi
+          n = n+1
+          ig = this_block%i_glob(i)
+          jg = this_block%j_glob(j)
+          gindex_ice(n) = (jg-1)*nx_global + ig
+       enddo
        enddo
     enddo
 
-    do n = 1,lsize
-       elemCoords(1,n) = lon(n)
-       elemCoords(2,n) = lat(n)
-       ! TODO: cice does not define corner values and there is no info about grid sizes (ie. dx, dy)
-       ! anywhere so make something up for now.  this has to be fixed if weights are generated on the fly!
-       ! corners are defined counterclockwise - is this true?
-       do m = 1,4
-          if (m == 1 .or. m == 4) dx = -0.05
-          if (m == 2 .or. m == 3) dx =  0.05
-          if (m == 1 .or. m == 2) dy = -0.05
-          if (m == 3 .or. m == 4) dy =  0.05
-          elemCornerCoords(1,m,n) = lon(n) + dx
-          elemCornerCoords(2,m,n) = lat(n) + dy
-       end do
-    end do
+    if (my_task == master_task) then
 
-    Emesh = ESMF_MeshCreate(parametricDim=2, &
-                            coordSys=ESMF_COORDSYS_SPH_DEG, &
-                            elementIds=gindex, &
-                            elementType=ESMF_MESHELEMTYPE_QUAD, &
-                            elementCoords=elemCoords, &
-                            elementCornerCoords=elemCornerCoords, &
-                            rc=rc)
+       ! Determine global index space for the blocks that have been eliminated
+       
+       globalID = 0
+       nlnd = 0
+       do jblk=1,nblocks_y
+       do iblk=1,nblocks_x
+          globalID = globalID + 1
+          if (distrb_info%blockLocation(globalID) == 0) then
+             this_block = get_block(globalID, globalID)
+             do j=this_block%jlo,this_block%jhi
+             do i=this_block%ilo,this_block%ihi
+                nlnd = nlnd + 1
+             end do
+             end do
+          end if
+       end do
+       end do
+       allocate(gindex_lnd(nlnd))
+
+       globalID = 0
+       nlnd = 0
+       do jblk=1,nblocks_y
+       do iblk=1,nblocks_x
+          globalID = globalID + 1
+          if (distrb_info%blockLocation(globalID) == 0) then
+             this_block = get_block(globalID, globalID)
+             do j=this_block%jlo,this_block%jhi
+             do i=this_block%ilo,this_block%ihi
+                nlnd = nlnd + 1
+                ig = this_block%i_glob(i)
+                jg = this_block%j_glob(j)
+                gindex_lnd(nlnd) = (jg-1)*nx_global + ig
+             end do
+             end do
+          end if
+       end do
+       end do
+
+       nice = size(gindex_ice)
+       allocate(gindex(nlnd + nice))
+       do n = 1,nice+nlnd
+          if (n <= nice) then
+             gindex(n) = gindex_ice(n)
+          else
+             gindex(n) = gindex_lnd(n-nice)
+          end if
+       end do
+
+       deallocate(gindex_lnd)
+
+    else
+
+       ! for all tasks other than master task
+       nice = size(gindex_ice)
+       allocate(gindex(nice))
+       gindex(:) = gindex_ice(:)
+
+    end if
+
+    ! create distGrid from global index array
+    DistGrid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    deallocate(gindex)
-    deallocate(lon)
-    deallocate(lat)
-    deallocate(elemCoords)
-    deallocate(elemCornerCoords)
+    ! read in the mesh
+    call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=cvalue, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    EMeshTemp = ESMF_MeshCreate(filename=trim(cvalue), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (my_task == master_task) then
+       write(nu_diag,*)'mesh file for cice domain is ',trim(cvalue)
+    end if
+
+    ! recreate the mesh using the above distGrid
+    EMesh = ESMF_MeshCreate(EMeshTemp, elementDistgrid=Distgrid, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! obtain mesh lats and lons
+    call ESMF_MeshGet(Emesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    allocate(ownedElemCoords(spatialDim*numOwnedElements))
+    allocate(lonMesh(numOwnedElements), latMesh(numOwnedElements))
+    call ESMF_MeshGet(Emesh, ownedElemCoords=ownedElemCoords)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    write(6,*)'DEBUG: numownedElements = ',numOwnedElements
+    write(6,*)'DEBUG: lsize = ',lsize
+    do n = 1,numOwnedElements
+       lonMesh(n) = ownedElemCoords(2*n-1)
+       latMesh(n) = ownedElemCoords(2*n)
+    end do
+
+    ! obtain internally generated cice lats and lons for error checks
+    allocate(lon(lsize))
+    allocate(lat(lsize))
+    n = 0
+    do iblk = 1, nblocks
+       this_block = get_block(blocks_ice(iblk),iblk)
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+       do j = jlo, jhi
+       do i = ilo, ihi
+          n = n+1
+          lon(n) = tlon(i,j,iblk)*rad_to_deg
+          lat(n) = tlat(i,j,iblk)*rad_to_deg
+       enddo
+       enddo
+    enddo
+
+    ! error check differences between internally generated lons and those read in
+    do n = 1,lsize
+       diff_lon = abs(lonMesh(n) - lon(n))
+       if ( (diff_lon > 1.e2  .and. abs(diff_lon - 360_r8) > 1.e-3) .or.&
+            (diff_lon > 1.e-3 .and. diff_lon < 1._r8) ) then
+          write(6,100)n,lonMesh(n),lon(n), diff_lon
+100       format('ERROR: CICE  n, lonmesh(n), lon(n), diff_lon = ',i6,2(f21.13,3x),d21.5)
+          call shr_sys_abort()
+       end if
+       if (abs(latMesh(n) - lat(n)) > 1.e-3) then
+          write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
+101       format('ERROR: CICE n, latmesh(n), lat(n), diff_lat = ',i6,2(f21.13,3x),d21.5)
+          call shr_sys_abort()
+       end if
+    end do
+
+    ! deallocate memory
+    deallocate(ownedElemCoords)
+    deallocate(lon, lonMesh)
+    deallocate(lat, latMesh)
 
     !-----------------------------------------------------------------
     ! Realize the actively coupled fields
@@ -767,9 +855,7 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) compid  ! convert from string to integer
 
-    call ice_set_gsmap( lmpicom, compid, gsmap_ice )
-    call ice_set_domain( lmpicom, gsmap_ice, dom_ice )
-    call ice_prescribed_init(compid, gsmap_ice, dom_ice)
+    call ice_prescribed_init(lmpicom, compid, gindex_ice)
 
     !-----------------------------------------------------------------
     ! Create cice export state
@@ -831,6 +917,9 @@ contains
     call shr_file_setLogLevel(shrloglev)
 
     call t_stopf ('cice_init_total')
+
+    deallocate(gindex_ice)
+    deallocate(gindex)
 
   end subroutine InitializeRealize
 
@@ -1224,214 +1313,6 @@ contains
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
 
   end subroutine ModelFinalize
-
-  !===============================================================================
-
-  subroutine ice_set_domain(  mpicom, gsmap_i, dom_i )
-
-    ! Arguments
-    integer        , intent(in)    :: mpicom
-    type(mct_gsMap), intent(in)    :: gsMap_i
-    type(mct_ggrid), intent(inout) :: dom_i
-
-    ! Local Variables
-    integer                 :: lsize
-    integer                 :: i, j, iblk, n, gi  ! indices
-    integer                 :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
-    real(dbl_kind), pointer :: data(:)            ! temporary
-    integer       , pointer :: idata(:)           ! temporary
-    type(block)             :: this_block         ! block information for current block
-    !--------------------------------
-
-    ! Initialize mct domain type
-    ! lat/lon in degrees,  area in radians^2, mask is 1 (ocean), 0 (non-ocean)
-
-    lsize = mct_gsMap_lsize(gsmap_i, mpicom)
-
-    call mct_gGrid_init(GGrid=dom_i, &
-         CoordChars='lat:lon:hgt', OtherChars='area:aream:mask:frac', lsize=lsize )
-    call mct_aVect_zero(dom_i%data)
-
-    ! Determine global gridpoint number attribute, GlobGridNum, which is set automatically by MCT
-
-    call mct_gsMap_orderedPoints(gsMap_i, my_task, idata)
-    call mct_gGrid_importIAttr(dom_i,'GlobGridNum',idata,lsize)
-    deallocate(idata)
-
-    ! Determine domain (numbering scheme is: West to East and South to North to South pole)
-    ! Initialize attribute vector with special value
-
-    allocate(data(lsize))
-    data(:) = -9999.0_R8
-    call mct_gGrid_importRAttr(dom_i,"lat"  ,data,lsize)
-    call mct_gGrid_importRAttr(dom_i,"lon"  ,data,lsize)
-    call mct_gGrid_importRAttr(dom_i,"area" ,data,lsize)
-    call mct_gGrid_importRAttr(dom_i,"aream",data,lsize)
-    data(:) = 0.0_R8
-    call mct_gGrid_importRAttr(dom_i,"mask",data,lsize)
-    call mct_gGrid_importRAttr(dom_i,"frac",data,lsize)
-
-    ! Fill in correct values for domain components
-
-    data(:) = -9999.0_R8
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-          data(n) = TLON(i,j,iblk)*rad_to_deg
-       enddo    !i
-       enddo    !j
-    enddo       !iblk
-    call mct_gGrid_importRattr(dom_i,"lon",data,lsize)
-
-    data(:) = -9999.0_R8
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-          data(n) = TLAT(i,j,iblk)*rad_to_deg
-       enddo   !i
-       enddo   !j
-    enddo      !iblk
-    call mct_gGrid_importRattr(dom_i,"lat",data,lsize)
-
-    data(:) = -9999.0_R8
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-          data(n) = tarea(i,j,iblk)/(radius*radius)
-       enddo   !i
-       enddo   !j
-    enddo      !iblk
-    call mct_gGrid_importRattr(dom_i,"area",data,lsize)
-
-    data(:) = 0.0_R8
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-          data(n) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
-       enddo   !i
-       enddo   !j
-    enddo      !iblk
-    call mct_gGrid_importRattr(dom_i,"mask",data,lsize)
-
-    data(:) = 0.0_R8
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-         if (trim(grid_type) == 'latlon') then
-             data(n) = ocn_gridcell_frac(i,j,iblk)
-          else
-             data(n) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
-          end if
-       enddo   !i
-       enddo   !j
-    enddo      !iblk
-    call mct_gGrid_importRattr(dom_i,"frac",data,lsize)
-
-    deallocate(data)
-
-  end subroutine ice_set_domain
-
-  !=======================================================================
-
-  subroutine ice_set_gsmap( mpicom, ID, gsMap_ice)
-
-    ! Arguments
-    integer        , intent(in)    :: mpicom
-    integer        , intent(in)    :: ID
-    type(mct_gsMap), intent(inout) :: gsMap_ice
-
-    ! Local variables
-    integer     :: lat, lon, i, j, iblk, n
-    integer     :: lsize,gsize
-    integer     :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
-    type(block) :: this_block         ! block information for current block
-    integer,allocatable :: gindex(:)
-    !--------------------------------
-
-    ! Build the CICE grid numbering for MCT
-    ! NOTE:  Numbering scheme is: West to East and South to North
-    ! starting at south pole.  Should be the same as what's used in SCRIP
-
-    ! number the local grid to get allocation size for gindex
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-          enddo
-       enddo
-    enddo
-    lsize = n
-
-    ! set gindex
-    allocate(gindex(lsize))
-    n = 0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             lon = this_block%i_glob(i)
-             lat = this_block%j_glob(j)
-             gindex(n) = (lat-1)*nx_global + lon
-          enddo
-       enddo
-    enddo
-
-    ! now set gsmap once gindex is available
-    gsize = nx_global*ny_global
-    call mct_gsMap_init( gsMap_ice, gindex, mpicom, ID, lsize, gsize )
-
-    !  deallocate gindex
-    deallocate(gindex)
-
-  end subroutine ice_set_gsmap
 
   !===============================================================================
 
