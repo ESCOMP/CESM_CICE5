@@ -44,8 +44,8 @@ module ice_comp_nuopc
   use ice_domain_size,        only : nx_global, ny_global
   use ice_domain,             only : nblocks, blocks_ice, distrb_info
   use ice_blocks,             only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
-  use ice_grid,               only : tlon, tlat 
-  use ice_constants,          only : rad_to_deg 
+  use ice_grid,               only : tlon, tlat
+  use ice_constants,          only : rad_to_deg
   use ice_communicate,        only : my_task, master_task, mpi_comm_ice
   use ice_calendar,           only : force_restart_now, write_ic
   use ice_calendar,           only : idate, mday, time, month, daycal, time2sec, year_init
@@ -693,7 +693,7 @@ contains
     if (my_task == master_task) then
 
        ! Determine global index space for the blocks that have been eliminated
-       
+
        globalID = 0
        nlnd = 0
        do jblk=1,nblocks_y
@@ -777,8 +777,6 @@ contains
     call ESMF_MeshGet(Emesh, ownedElemCoords=ownedElemCoords)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    write(6,*)'DEBUG: numownedElements = ',numOwnedElements
-    write(6,*)'DEBUG: lsize = ',lsize
     do n = 1,numOwnedElements
        lonMesh(n) = ownedElemCoords(2*n-1)
        latMesh(n) = ownedElemCoords(2*n)
@@ -1132,9 +1130,6 @@ contains
     ! Need to have this logic here instead of in finalize phase
     ! since the finalize phase will still be called even in aqua-planet mode
 
-    ! Need to stop this at the end of every run phase in a coupled run.
-    call ice_timer_stop(timer_total)
-
     !--------------------------------
     ! Determine if time to stop
     !--------------------------------
@@ -1147,14 +1142,17 @@ contains
        stop_now = .true.
        call ESMF_AlarmRingerOff( alarm, rc=rc )
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call ice_timer_print_all(stats=.true.) ! print timing information
-       call release_all_fileunits
     else
        stop_now = .false.
     endif
 
     call t_stopf ('cice_run_total')
+    ! Need to stop this at the end of every run phase in a coupled run.
+    call ice_timer_stop(timer_total)
+    if (stop_now) then
+       call ice_timer_print_all(stats=.true.) ! print timing information
+       call release_all_fileunits
+    endif
 
   105  format( A, 2i8, A, f10.2, A, f10.2, A)
 
