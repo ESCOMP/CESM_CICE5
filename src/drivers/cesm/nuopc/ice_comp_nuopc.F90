@@ -1161,6 +1161,8 @@ contains
   !===============================================================================
 
   subroutine ModelSetRunClock(gcomp, rc)
+    use shr_nuopc_time_mod, only : shr_nuopc_time_set_component_stop_alarm
+
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
 
@@ -1174,10 +1176,6 @@ contains
     integer                  :: restart_n      ! Number until restart interval
     integer                  :: restart_ymd    ! Restart date (YYYYMMDD)
     type(ESMF_ALARM)         :: restart_alarm
-    character(len=256)       :: stop_option    ! Stop option units
-    integer                  :: stop_n         ! Number until stop interval
-    integer                  :: stop_ymd       ! Stop date (YYYYMMDD)
-    type(ESMF_ALARM)         :: stop_alarm
     integer                  :: dbrc
     character(len=128)       :: name
     integer                  :: alarmcount
@@ -1245,27 +1243,8 @@ contains
        !----------------
        ! Stop alarm
        !----------------
-       call NUOPC_CompAttributeGet(gcomp, name="stop_option", value=stop_option, rc=rc)
+       call shr_nuopc_time_set_component_stop_alarm(gcomp, rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call NUOPC_CompAttributeGet(gcomp, name="stop_n", value=cvalue, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) stop_n
-
-       call NUOPC_CompAttributeGet(gcomp, name="stop_ymd", value=cvalue, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) stop_ymd
-
-       call shr_nuopc_time_alarmInit(mclock, stop_alarm, stop_option, &
-            opt_n   = stop_n,           &
-            opt_ymd = stop_ymd,         &
-            RefTime = mcurrTime,           &
-            alarmname = 'alarm_stop', rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call ESMF_AlarmSet(stop_alarm, clock=mclock, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
     end if
 
     !--------------------------------
