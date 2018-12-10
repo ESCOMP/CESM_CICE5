@@ -437,6 +437,7 @@
       <value hgrid="gx1v7">$DIN_LOC_ROOT/ocn/pop/gx1v7/grid/topography_20161215.ieeei4</value>
       <value hgrid="tx0.66v1">$DIN_LOC_ROOT/ocn/pop/tx0.66v1/grid/topography_20180604.ieeei4</value>
       <value hgrid="gx3v7">$DIN_LOC_ROOT/ocn/pop/gx3v7/grid/topography_20100105.ieeei4</value>
+      <value hgrid="tx0.66v1">/glade/p_old/work/altuntas/mom.input/tx0.66v1/cice_input_180604/topography_20180604.ieeei4</value>
       <value hgrid="tx0.1v2">$DIN_LOC_ROOT/ocn/pop/tx0.1v2/grid/topography_200709.ieeei4</value>
       <value hgrid="tx0.1v3">$DIN_LOC_ROOT/ocn/pop/tx0.1v3/grid/topography_20170718.ieeei4</value>
       <value hgrid="tx1v1">$DIN_LOC_ROOT/ocn/pop/tx1v1/grid/topography_20050510.ieeei4</value>
