@@ -44,7 +44,9 @@ module ice_comp_nuopc
   use ice_domain_size,        only : nx_global, ny_global
   use ice_domain,             only : nblocks, blocks_ice, distrb_info
   use ice_blocks,             only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
-  use ice_grid,               only : tlon, tlat
+  use ice_blocks,             only : nblocks_tot, get_block_parameter
+  use ice_distribution,       only : ice_distributiongetblockloc
+  use ice_grid,               only : tlon, tlat, hm, tarea, ULON, ULAT
   use ice_constants,          only : rad_to_deg
   use ice_communicate,        only : my_task, master_task, mpi_comm_ice
   use ice_calendar,           only : force_restart_now, write_ic
@@ -104,6 +106,8 @@ module ice_comp_nuopc
   character(*),parameter :: modName =  "(ice_comp_nuopc)"
   character(*),parameter :: u_FILE_u = &
        __FILE__
+
+  type(ESMF_Grid), save :: ice_grid_i
 
 !=======================================================================
 contains
@@ -331,7 +335,9 @@ contains
   !===============================================================================
 
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
+
     use shr_nuopc_utils_mod, only: shr_nuopc_set_component_logging,shr_nuopc_get_component_instance
+
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState
@@ -340,58 +346,66 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    type(ESMF_DistGrid)               :: distGrid
-    type(ESMF_Mesh)                   :: Emesh, EmeshTemp
-    integer                           :: spatialDim
-    integer                           :: numOwnedElements
-    real(R8), pointer                 :: ownedElemCoords(:)
-    real(r8), pointer                 :: lat(:), latMesh(:)
-    real(r8), pointer                 :: lon(:), lonMesh(:)
-    integer , allocatable             :: gindex_ice(:)
-    integer , allocatable             :: gindex_lnd(:)
-    integer , allocatable             :: gindex(:)
-    integer                           :: nlnd,nice,globalID
-    character(CL)                     :: cvalue
-    character(ESMF_MAXSTR)            :: convCIM, purpComp
-    type(ESMF_VM)                     :: vm
-    type(ESMF_Time)                   :: currTime           ! Current time
-    type(ESMF_Time)                   :: startTime          ! Start time
-    type(ESMF_Time)                   :: stopTime           ! Stop time
-    type(ESMF_Time)                   :: refTime            ! Ref time
-    type(ESMF_TimeInterval)           :: timeStep           ! Model timestep
-    type(ESMF_Calendar)               :: esmf_calendar      ! esmf calendar
-    type(ESMF_CalKind_Flag)           :: esmf_caltype       ! esmf calendar type
-    integer                           :: start_ymd          ! Start date (YYYYMMDD)
-    integer                           :: start_tod          ! start time of day (s)
-    integer                           :: curr_ymd           ! Current date (YYYYMMDD)
-    integer                           :: curr_tod           ! Current time of day (s)
-    integer                           :: stop_ymd           ! stop date (YYYYMMDD)
-    integer                           :: stop_tod           ! stop time of day (sec)
-    integer                           :: ref_ymd            ! Reference date (YYYYMMDD)
-    integer                           :: ref_tod            ! reference time of day (s)
-    integer                           :: yy,mm,dd           ! Temporaries for time query
-    integer                           :: iyear              ! yyyy
-    integer                           :: dtime              ! time step
-    integer                           :: lmpicom
-    integer                           :: shrlogunit         ! original log unit
-    integer                           :: shrloglev          ! original log level
-    character(len=cs)                 :: starttype          ! infodata start type
-    integer                           :: lsize              ! local size of coupling array
-    character(len=512)                :: diro
-    character(len=512)                :: logfile
-    logical                           :: isPresent
-    integer                           :: localPet
-    integer                           :: dbrc
-    integer                           :: n,c,g,i,j,m        ! indices
-    integer                           :: iblk, jblk         ! indices
-    integer                           :: ig, jg             ! indices
-    integer                           :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
-    type(block)                       :: this_block         ! block information for current block
-    integer                           :: compid             ! component id
-    character(len=CL)                 :: tempc1,tempc2
-    real(R8)                          :: diff_lon
-    logical                           :: flds_i2o_per_cat   ! .true. => select per ice thickness category
-                                                            ! fields passed from ice to ocn
+    type(ESMF_DistGrid)     :: distGrid
+    type(ESMF_Mesh)         :: Emesh, EmeshTemp
+    integer                 :: spatialDim
+    integer                 :: numOwnedElements
+    real(R8), pointer       :: ownedElemCoords(:)
+    real(r8), pointer       :: lat(:), latMesh(:)
+    real(r8), pointer       :: lon(:), lonMesh(:)
+    integer , allocatable   :: gindex_ice(:)
+    integer , allocatable   :: gindex_elim(:)
+    integer , allocatable   :: gindex(:)
+    integer                 :: globalID
+    character(CL)           :: cvalue
+    character(ESMF_MAXSTR)  :: convCIM, purpComp
+    type(ESMF_VM)           :: vm
+    type(ESMF_Time)         :: currTime           ! Current time
+    type(ESMF_Time)         :: startTime          ! Start time
+    type(ESMF_Time)         :: stopTime           ! Stop time
+    type(ESMF_Time)         :: refTime            ! Ref time
+    type(ESMF_TimeInterval) :: timeStep           ! Model timestep
+    type(ESMF_Calendar)     :: esmf_calendar      ! esmf calendar
+    type(ESMF_CalKind_Flag) :: esmf_caltype       ! esmf calendar type
+    integer                 :: start_ymd          ! Start date (YYYYMMDD)
+    integer                 :: start_tod          ! start time of day (s)
+    integer                 :: curr_ymd           ! Current date (YYYYMMDD)
+    integer                 :: curr_tod           ! Current time of day (s)
+    integer                 :: stop_ymd           ! stop date (YYYYMMDD)
+    integer                 :: stop_tod           ! stop time of day (sec)
+    integer                 :: ref_ymd            ! Reference date (YYYYMMDD)
+    integer                 :: ref_tod            ! reference time of day (s)
+    integer                 :: yy,mm,dd           ! Temporaries for time query
+    integer                 :: iyear              ! yyyy
+    integer                 :: dtime              ! time step
+    integer                 :: lmpicom
+    integer                 :: shrlogunit         ! original log unit
+    integer                 :: shrloglev          ! original log level
+    character(len=cs)       :: starttype          ! infodata start type
+    integer                 :: lsize              ! local size of coupling array
+    character(len=512)      :: diro
+    character(len=512)      :: logfile
+    logical                 :: isPresent
+    integer                 :: localPet
+    integer                 :: dbrc
+    integer                 :: n,c,g,i,j,m        ! indices
+    integer                 :: iblk, jblk         ! indices
+    integer                 :: ig, jg             ! indices
+    integer                 :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
+    type(block)             :: this_block         ! block information for current block
+    integer                 :: compid             ! component id
+    character(len=CL)       :: tempc1,tempc2
+    real(R8)                :: diff_lon
+    logical                 :: flds_i2o_per_cat   ! .true. => select per ice thickness category
+    integer                 :: npes
+    integer                 :: num_elim_global
+    integer                 :: num_elim_local
+    integer                 :: num_elim
+    integer                 :: num_ice
+    integer                 :: num_elim_gcells    ! local number of eliminated gridcells
+    integer                 :: num_elim_blocks    ! local number of eliminated blocks
+    integer                 :: num_total_blocks 
+    integer                 :: my_elim_start, my_elim_end
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
     !--------------------------------
@@ -406,7 +420,7 @@ contains
     call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, rc=rc)
+    call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
@@ -653,7 +667,7 @@ contains
     end if
 
     !---------------------------------------------------------------------------
-    ! Generate the EMSF mesh
+    ! Determine the global index space needed for the distgrid
     !---------------------------------------------------------------------------
 
     ! number the local grid to get allocation size for gindex_ice
@@ -681,79 +695,114 @@ contains
        jlo = this_block%jlo
        jhi = this_block%jhi
        do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-          ig = this_block%i_glob(i)
-          jg = this_block%j_glob(j)
-          gindex_ice(n) = (jg-1)*nx_global + ig
-       enddo
+          do i = ilo, ihi
+             n = n+1
+             ig = this_block%i_glob(i)
+             jg = this_block%j_glob(j)
+             gindex_ice(n) = (jg-1)*nx_global + ig
+          enddo
        enddo
     enddo
 
-    if (my_task == master_task) then
-
-       ! Determine global index space for the blocks that have been eliminated
-
-       globalID = 0
-       nlnd = 0
-       do jblk=1,nblocks_y
+    ! Determine total number of eliminated blocks globally
+    globalID = 0
+    num_elim_global = 0  ! number of eliminated blocks
+    num_total_blocks = 0
+    do jblk=1,nblocks_y
        do iblk=1,nblocks_x
           globalID = globalID + 1
+          num_total_blocks = num_total_blocks + 1
           if (distrb_info%blockLocation(globalID) == 0) then
-             this_block = get_block(globalID, globalID)
-             do j=this_block%jlo,this_block%jhi
-             do i=this_block%ilo,this_block%ihi
-                nlnd = nlnd + 1
-             end do
-             end do
+             num_elim_global = num_elim_global + 1
           end if
        end do
-       end do
-       allocate(gindex_lnd(nlnd))
+    end do
 
+    if (num_elim_global > 0) then
+
+       ! Distribute the eliminated blocks in a round robin fashion amoung processors
+       num_elim_local = num_elim_global / npes
+       my_elim_start = num_elim_local*localPet + min(localPet, mod(num_elim_global, npes)) + 1
+       if (localPet < mod(num_elim_global, npes)) then
+          num_elim_local = num_elim_local + 1
+       end if
+       my_elim_end = my_elim_start + num_elim_local - 1
+
+       ! Determine the number of eliminated gridcells locally
        globalID = 0
-       nlnd = 0
+       num_elim_blocks = 0  ! local number of eliminated blocks
+       num_elim_gcells = 0
        do jblk=1,nblocks_y
-       do iblk=1,nblocks_x
-          globalID = globalID + 1
-          if (distrb_info%blockLocation(globalID) == 0) then
-             this_block = get_block(globalID, globalID)
-             do j=this_block%jlo,this_block%jhi
-             do i=this_block%ilo,this_block%ihi
-                nlnd = nlnd + 1
-                ig = this_block%i_glob(i)
-                jg = this_block%j_glob(j)
-                gindex_lnd(nlnd) = (jg-1)*nx_global + ig
-             end do
-             end do
-          end if
-       end do
+          do iblk=1,nblocks_x
+             globalID = globalID + 1
+             if (distrb_info%blockLocation(globalID) == 0) then
+                num_elim_blocks = num_elim_blocks + 1
+                if (num_elim_blocks >= my_elim_start .and. num_elim_blocks <= my_elim_end) then
+                   this_block = get_block(globalID, globalID)
+                   num_elim_gcells = num_elim_gcells + &
+                        (this_block%jhi-this_block%jlo+1) * (this_block%ihi-this_block%ilo+1) 
+                end if
+             end if
+          end do
        end do
 
-       nice = size(gindex_ice)
-       allocate(gindex(nlnd + nice))
-       do n = 1,nice+nlnd
-          if (n <= nice) then
-             gindex(n) = gindex_ice(n)
-          else
-             gindex(n) = gindex_lnd(n-nice)
-          end if
+       ! Determine the global index space of the eliminated gridcells
+       allocate(gindex_elim(num_elim_gcells))
+       globalID = 0
+       num_elim_gcells = 0  ! local number of eliminated gridcells
+       num_elim_blocks = 0  ! local number of eliminated blocks
+       do jblk=1,nblocks_y
+          do iblk=1,nblocks_x
+             globalID = globalID + 1
+             if (distrb_info%blockLocation(globalID) == 0) then
+                this_block = get_block(globalID, globalID)
+                num_elim_blocks = num_elim_blocks + 1
+                if (num_elim_blocks >= my_elim_start .and. num_elim_blocks <= my_elim_end) then
+                   do j=this_block%jlo,this_block%jhi
+                      do i=this_block%ilo,this_block%ihi
+                         num_elim_gcells = num_elim_gcells + 1
+                         ig = this_block%i_glob(i)
+                         jg = this_block%j_glob(j)
+                         gindex_elim(num_elim_gcells) = (jg-1)*nx_global + ig
+                      end do
+                   end do
+                end if
+             end if
+          end do
        end do
 
-       deallocate(gindex_lnd)
+       ! create a global index that includes both active and eliminated gridcells
+       num_ice  = size(gindex_ice)
+       num_elim = size(gindex_elim)
+       allocate(gindex(num_elim + num_ice))
+       do n = 1,num_ice
+          gindex(n) = gindex_ice(n)
+       end do
+       do n = num_ice+1,num_ice+num_elim
+          gindex(n) = gindex_elim(n-num_ice)
+       end do
 
     else
 
-       ! for all tasks other than master task
-       nice = size(gindex_ice)
-       allocate(gindex(nice))
-       gindex(:) = gindex_ice(:)
+       ! No eliminated land blocks
+       num_ice = size(gindex_ice)
+       allocate(gindex(num_ice))
+       do n = 1,num_ice
+          gindex(n) = gindex_ice(n)
+       end do
 
     end if
 
-    ! create distGrid from global index array
+    !---------------------------------------------------------------------------
+    ! Create distGrid from global index array
+    !---------------------------------------------------------------------------
+
     DistGrid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    !---------------------------------------------------------------------------
+    ! Create the CICE mesh
+    !---------------------------------------------------------------------------
 
     ! read in the mesh
     call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=cvalue, rc=rc)
@@ -793,11 +842,11 @@ contains
        jlo = this_block%jlo
        jhi = this_block%jhi
        do j = jlo, jhi
-       do i = ilo, ihi
-          n = n+1
-          lon(n) = tlon(i,j,iblk)*rad_to_deg
-          lat(n) = tlat(i,j,iblk)*rad_to_deg
-       enddo
+          do i = ilo, ihi
+             n = n+1
+             lon(n) = tlon(i,j,iblk)*rad_to_deg
+             lat(n) = tlat(i,j,iblk)*rad_to_deg
+          enddo
        enddo
     enddo
 
@@ -917,6 +966,7 @@ contains
     call t_stopf ('cice_init_total')
 
     deallocate(gindex_ice)
+    deallocate(gindex_elim)
     deallocate(gindex)
 
   end subroutine InitializeRealize
@@ -1341,6 +1391,7 @@ contains
     use ESMF  , only : ESMF_MAXSTR, ESMF_Field, ESMF_State, ESMF_Mesh, ESMF_StateRemove
     use ESMF  , only : ESMF_LogFoundError, ESMF_LOGMSG_INFO, ESMF_SUCCESS
     use ESMF  , only : ESMF_LogWrite, ESMF_LOGMSG_ERROR, ESMF_LOGERR_PASSTHRU
+    use ESMF  , only : ESMF_VM
 
     type(ESMF_State)    , intent(inout) :: state
     type(fld_list_type) , intent(in)    :: fldList(:)
