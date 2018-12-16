@@ -284,6 +284,8 @@ contains
     call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_tref'       , flds_concat=flds_i2x)
     call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_qref'       , flds_concat=flds_i2x)
     call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_snowh'      , flds_concat=flds_i2x)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_vice'       , flds_concat=flds_i2x)
+    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_vsno'       , flds_concat=flds_i2x)
     call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_u10'        , flds_concat=flds_i2x)
     call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_avsdr'      , flds_concat=flds_i2x)
     call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_anidr'      , flds_concat=flds_i2x)
@@ -782,6 +784,8 @@ contains
           gindex(n) = gindex_elim(n-num_ice)
        end do
 
+       deallocate(gindex_elim)
+
     else
 
        ! No eliminated land blocks
@@ -966,7 +970,6 @@ contains
     call t_stopf ('cice_init_total')
 
     deallocate(gindex_ice)
-    deallocate(gindex_elim)
     deallocate(gindex)
 
   end subroutine InitializeRealize

@@ -13,6 +13,8 @@ module ice_cpl_indices
   integer :: index_i2x_Si_ifrac        ! fractional ice coverage wrt ocean
   integer :: index_i2x_Si_imask        ! domain ice fraction (set at initialization and kept constant)
   integer :: index_i2x_Si_snowh        ! snow height (m)
+  integer :: index_i2x_Si_vsno         ! snow volume
+  integer :: index_i2x_Si_vice         ! ice volume
   integer :: index_i2x_Si_t            ! temperature
   integer :: index_i2x_Si_tref         ! 2m reference temperature
   integer :: index_i2x_Si_qref         ! 2m reference specific humidity
@@ -131,6 +133,8 @@ contains
     index_i2x_Si_avsdf      = mct_avect_indexra(i2x,'Si_avsdf')
     index_i2x_Si_anidf      = mct_avect_indexra(i2x,'Si_anidf')
     index_i2x_Si_snowh      = mct_avect_indexra(i2x,'Si_snowh')
+    index_i2x_Si_vice       = mct_avect_indexra(i2x,'Si_vice')
+    index_i2x_Si_vsno       = mct_avect_indexra(i2x,'Si_vsno')
     index_i2x_Si_u10        = mct_avect_indexra(i2x,'Si_u10')
     index_i2x_Faii_taux     = mct_avect_indexra(i2x,'Faii_taux')
     index_i2x_Faii_tauy     = mct_avect_indexra(i2x,'Faii_tauy')

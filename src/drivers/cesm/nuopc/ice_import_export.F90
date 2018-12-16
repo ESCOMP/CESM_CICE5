@@ -595,6 +595,8 @@ contains
                 i2x(index_i2x_Si_tref  ,n)    = Tref(i,j,iblk)
                 i2x(index_i2x_Si_qref  ,n)    = Qref(i,j,iblk)
                 i2x(index_i2x_Si_snowh ,n)    = vsno(i,j,iblk) / ailohi(i,j,iblk)
+                i2x(index_i2x_Si_vsno  ,n)    = vsno(i,j,iblk)
+                i2x(index_i2x_Si_vice  ,n)    = vice(i,j,iblk)
 
                 if (index_i2x_Si_logz0 > 0) then
                    if (Cdn_atm(i,j,iblk) > c0) then
