@@ -224,14 +224,7 @@ contains
     if (trim(runtype) /= 'initial') then
        nextsw_cday = -1
     else
-       ! TODO: need to figure out a way to turn initial implementation back on
-       ! The following was the initial implementation 
-       ! call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
-       call ESMF_ClockGet( Eclock, currTime=currTime, rc=rc )
-       if ( rc /= ESMF_SUCCESS ) call shr_sys_abort('ice_ERROR: ice_comp_mct for ESMF_CLockGet inquiry')
-       ! For NUOPC comparison its replaced by the call below
-       call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-       if ( rc /= ESMF_SUCCESS ) call shr_sys_abort('ERROR: ice_comp_mct for ESMF_TimeGet inquiry')
+       call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
     end if
 
     !=============================================================
