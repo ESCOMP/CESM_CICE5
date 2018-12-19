@@ -1,4 +1,130 @@
 ===============================================================
+cice5_20181109
+Originator: dbailey
+Date:  09 Nov 2018
+Version: 5.0
+One-line: Remove print statement.
+
+        modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20181108
+Originator: dbailey
+Date:  08 Nov 2018
+Version: 5.0
+One-line: Fix bug with aicen in history.
+
+        modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20181107
+Originator: dbailey
+Date:  07 Nov 2018
+Version: 5.0
+One-line: Broadcast f_CMIP.
+
+        modified:   ice_history.F90
+
+===============================================================
+cice5_20181104
+Originator: dbailey
+Date:  04 Nov 2018
+Version: 5.0
+One-line: Fix threading with dfresh and dfsalt.
+
+        modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20181022
+Originator: sacks
+Date:  22 Oct 2018
+Version: 5.0
+One-line: Add %CMIP6 qualifier.
+
+        modified:   cime_config/config_component.xml
+
+===============================================================
+cice5_20181008
+Originator: dbailey
+Date:  08 Oct 2018
+Version: 5.0
+One-line: Remove some print statements.
+
+        modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20180913
+Originator: dbailey
+Date:  13 Sep 2018
+Version: 5.0
+One-line: Fix hobart NAG and CMIP variable changes.
+
+I changed the nodes for the hobart tests to 4 so the 
+NAG compiler tests would pass.
+I also made some updates for CMIP variables. (BFB)
+
+        modified:   cime_config/config_pes.xml
+        modified:   src/source/ice_flux.F90
+        modified:   src/source/ice_history.F90
+        modified:   src/source/ice_step_mod.F90
+        modified:   src/source/ice_therm_vertical.F90
+
+===============================================================
+cice5_20180808
+Originator: dbailey
+Date:  08 Aug 2018
+Version: 5.0
+One-line: Fix config_compsets.xml
+
+	modified:   cime_config/config_compsets.xml
+
+===============================================================
+cice5_20180807
+Originator: dbailey
+Date:  07 Aug 2018
+Version: 5.0
+One-line: Additional history fixes.
+
+	modified:   cime_config/namelist_definition_cice.xml
+	modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20180803
+Originator: dbailey
+Date:  03 Aug 2018
+Version: 5.0
+One-line: Additional history fixes.
+
+	modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20180724
+Originator: dbailey
+Date:  23 July 2018
+Version: 5.0
+One-line: Additional CMIP variable fixes.
+
+	modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20180723
+Originator: dbailey
+Date:  23 July 2018
+Version: 5.0
+One-line: History variable fixes.
+
+	modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20180530
+Originator: dbailey
+Date:  30 May 2018
+Version: 5.0
+One-line: Inputdata fix.
+
+	modified:   cime_config/namelist_definition_cice.xml
+
+===============================================================
 cice5_20180424
 Originator: dbailey
 Date:  24 Apr 2018
