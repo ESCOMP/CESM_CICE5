@@ -14,7 +14,7 @@ module ice_comp_nuopc
   use NUOPC_Model           , only : model_label_DataInitialize => label_DataInitialize
   use NUOPC_Model           , only : model_label_SetRunClock    => label_SetRunClock
   use NUOPC_Model           , only : model_label_Finalize       => label_Finalize
-  use NUOPC_Model           , only : NUOPC_ModelGet
+  use NUOPC_Model           , only : NUOPC_ModelGet, SetVM
   use med_constants_mod     , only : R8, I8, CXX, CS,CL
   use shr_sys_mod           , only : shr_sys_abort
   use shr_log_mod           , only : shr_log_Unit
@@ -72,7 +72,7 @@ module ice_comp_nuopc
   implicit none
 
   public  :: SetServices
-
+  public  :: SetVM
   private :: InitializeP0
   private :: InitializeAdvertise
   private :: InitializeRealize
