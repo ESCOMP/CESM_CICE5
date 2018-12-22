@@ -15,7 +15,7 @@ module ice_comp_nuopc
   use NUOPC_Model           , only : model_label_SetRunClock    => label_SetRunClock
   use NUOPC_Model           , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model           , only : NUOPC_ModelGet, SetVM
-  use med_constants_mod     , only : R8, I8, CXX, CS,CL
+  use med_constants_mod     , only : R8, CS,CL
   use shr_sys_mod           , only : shr_sys_abort
   use shr_log_mod           , only : shr_log_Unit
   use shr_file_mod          , only : shr_file_getlogunit, shr_file_setlogunit
@@ -35,12 +35,10 @@ module ice_comp_nuopc
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_SetScalar
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_GetScalar
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_Diagnose
-  use shr_nuopc_grid_mod    , only : shr_nuopc_grid_ArrayToState
-  use shr_nuopc_grid_mod    , only : shr_nuopc_grid_StateToArray
   use shr_nuopc_time_mod    , only : shr_nuopc_time_AlarmInit
 
-  use ice_cpl_indices,        only : ice_cpl_indices_set
   use ice_import_export,      only : ice_import, ice_export
+  use ice_import_export,      only : ice_advertise_fields, ice_realize_fields
   use ice_domain_size,        only : nx_global, ny_global
   use ice_domain,             only : nblocks, blocks_ice, distrb_info
   use ice_blocks,             only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
@@ -55,7 +53,7 @@ module ice_comp_nuopc
   use ice_orbital,            only : eccen, obliqr, lambm0, mvelpp
   use ice_kinds_mod,          only : dbl_kind, int_kind
   use ice_scam,               only : scmlat, scmlon, single_column
-  use ice_fileunits,          only : nu_diag, ice_stdout, inst_index, inst_name, inst_suffix, release_all_fileunits
+  use ice_fileunits,          only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
   use ice_ocean,              only : tfrz_option
   use ice_therm_shared,       only : ktherm
   use ice_restart_shared,     only : runid, runtype, restart_dir, restart_file
@@ -73,41 +71,18 @@ module ice_comp_nuopc
 
   public  :: SetServices
   public  :: SetVM
+
   private :: InitializeP0
   private :: InitializeAdvertise
   private :: InitializeRealize
   private :: ModelAdvance
   private :: ModelSetRunClock
   private :: ModelFinalize
-  private :: fld_list_add
-  private :: fld_list_realize
 
-  !--------------------------------------------------------------------------
-  ! Private module data
-  !--------------------------------------------------------------------------
-
-  type fld_list_type
-    character(len=128) :: stdname
-  end type fld_list_type
-
-  integer, parameter     :: fldsMax = 100
-  integer                :: fldsToIce_num = 0
-  integer                :: fldsFrIce_num = 0
-  type (fld_list_type)   :: fldsToIce(fldsMax)
-  type (fld_list_type)   :: fldsFrIce(fldsMax)
-
-  character(CXX)         :: flds_i2x = ''
-  character(CXX)         :: flds_x2i = ''
-  real(r8), allocatable  :: x2i(:,:)
-  real(r8), allocatable  :: i2x(:,:)
-  integer                :: nflds_i2x
-  integer                :: nflds_x2i
-  integer, parameter     :: dbug = 10
-  character(*),parameter :: modName =  "(ice_comp_nuopc)"
-  character(*),parameter :: u_FILE_u = &
+  integer     , parameter :: dbug = 10
+  character(*), parameter :: modName =  "(ice_comp_nuopc)"
+  character(*), parameter :: u_FILE_u = &
        __FILE__
-
-  type(ESMF_Grid), save :: ice_grid_i
 
 !=======================================================================
 contains
@@ -187,7 +162,7 @@ contains
   !===============================================================================
 
   subroutine InitializeAdvertise(gcomp, importState, exportState, clock, rc)
-    use shr_nuopc_utils_mod    , only : shr_nuopc_set_component_logging, shr_nuopc_get_component_instance
+
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
     type(ESMF_State)     :: importState, exportState
@@ -195,142 +170,11 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    integer       :: n,nflds
-    character(CS) :: stdname
-    character(CL) :: cvalue
-    integer       :: dbrc
-    logical       :: flds_wiso  ! use case
     character(len=*), parameter :: subname=trim(modName)//':(InitializeAdvertise) '
     !--------------------------------
 
-    rc = ESMF_SUCCESS
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
-
-    call NUOPC_CompAttributeGet(gcomp, name='flds_wiso', value=cvalue, rc=rc)
+    call ice_advertise_fields(gcomp, importState, exportSTate, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) flds_wiso
-    call ESMF_LogWrite('flds_wiso = '// trim(cvalue), ESMF_LOGMSG_INFO, rc=dbrc)
-
-    !-----------------
-    ! advertise import fields
-    !-----------------
-
-    call fld_list_add(fldsToIce_num, fldsToIce, trim(flds_scalar_name))
-
-    ! from ocean
-    call fld_list_add(fldsToIce_num, fldsToIce, 'So_dhdx'       , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'So_dhdy'       , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'So_t'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'So_s'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'So_u'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'So_v'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Fioo_q'        , flds_concat=flds_x2i)
-
-    if (flds_wiso) then
-       call fld_list_add(fldsToIce_num, fldsToIce, 'So_roce_HDO'   , flds_concat=flds_x2i)
-       call fld_list_add(fldsToIce_num, fldsToIce, 'So_roce_16O'   , flds_concat=flds_x2i)
-       call fld_list_add(fldsToIce_num, fldsToIce, 'So_roce_18O'   , flds_concat=flds_x2i)
-    end if
-
-    ! from atmosphere
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_z'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_u'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_v'          , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_ptem'       , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_shum'       , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_dens'       , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Sa_tbot'       , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_swvdr'    , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_swndr'    , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_swvdf'    , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_swndf'    , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_lwdn'     , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_rain'     , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_snow'     , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_bcphodry' , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_bcphidry' , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_bcphiwet' , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstdry1'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstdry2'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstdry3'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstdry4'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstwet1'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstwet2'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstwet3'  , flds_concat=flds_x2i)
-    call fld_list_add(fldsToIce_num, fldsToIce, 'Faxa_dstwet4'  , flds_concat=flds_x2i)
-
-    if (flds_wiso) then
-       call fld_list_add(fldsToIce_num, fldsToIce, 'So_roce_HDO'   , flds_concat=flds_x2i)
-       call fld_list_add(fldsToIce_num, fldsToIce, 'So_roce_16O'   , flds_concat=flds_x2i)
-       call fld_list_add(fldsToIce_num, fldsToIce, 'So_roce_18O'   , flds_concat=flds_x2i)
-    end if
-
-    do n = 1,fldsToIce_num
-       call NUOPC_Advertise(importState, standardName=fldsToIce(n)%stdname, &
-            TransferOfferGeomObject='will provide', rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end do
-
-    !-----------------
-    ! advertise export fields
-    !-----------------
-
-    call fld_list_add(fldsFrIce_num, fldsFrIce, trim(flds_scalar_name))
-
-    ! Ice states
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_imask'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_ifrac'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_t'          , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_tref'       , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_qref'       , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_snowh'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_vice'       , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_vsno'       , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_u10'        , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_avsdr'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_anidr'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_avsdf'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_anidf'      , flds_concat=flds_i2x)
-
-    ! a/i fluxes computed by Ice
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_taux'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_tauy'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_lat'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_sen'      , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_lwup'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_evap'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_swnet'    , flds_concat=flds_i2x)
-
-    ! i/o fluxes computed by ice
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_melth'    , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen'    , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_meltw'    , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_salt'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_taux'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_tauy'     , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_bcpho'    , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_bcphi'    , flds_concat=flds_i2x)
-    call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_flxdst'   , flds_concat=flds_i2x)
-
-    if (flds_wiso) then
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_HDO'      , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_16O'      , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Fioi_18O'      , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_evap_HDO' , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_evap_16O' , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Faii_evap_18O' , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_qref_HDO'   , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_qref_16O'   , flds_concat=flds_i2x)
-       call fld_list_add(fldsFrIce_num, fldsFrIce, 'Si_qref_18O'   , flds_concat=flds_i2x)
-    end if
-
-    do n = 1,fldsFrIce_num
-       call NUOPC_Advertise(exportState, standardName=fldsFrIce(n)%stdname, &
-            TransferOfferGeomObject='will provide', rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    enddo
-
-    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
 
   end subroutine InitializeAdvertise
 
@@ -338,7 +182,8 @@ contains
 
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
 
-    use shr_nuopc_utils_mod, only: shr_nuopc_set_component_logging,shr_nuopc_get_component_instance
+    use shr_nuopc_utils_mod, only: shr_nuopc_set_component_logging
+    use shr_nuopc_utils_mod, only: shr_nuopc_get_component_instance
 
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
@@ -398,7 +243,6 @@ contains
     integer                 :: compid             ! component id
     character(len=CL)       :: tempc1,tempc2
     real(R8)                :: diff_lon
-    logical                 :: flds_i2o_per_cat   ! .true. => select per ice thickness category
     integer                 :: npes
     integer                 :: num_elim_global
     integer                 :: num_elim_local
@@ -452,12 +296,6 @@ contains
     ! Determine field indices of import/export arrays
     !----------------------
 
-    call NUOPC_CompAttributeGet(gcomp, name='flds_i2o_per_cat', value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) flds_i2o_per_cat
-    call ESMF_LogWrite('flds_i2o_per_cat = '// trim(cvalue), ESMF_LOGMSG_INFO, rc=dbrc)
-
-    call ice_cpl_indices_set(flds_x2i, flds_i2x, flds_i2o_per_cat)
 
     !----------------------------------------------------------------------------
     ! Initialize cice - needed in realize phase to get grid information
@@ -879,24 +717,7 @@ contains
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call fld_list_realize( &
-         state=importState, &
-         fldList=fldsToIce, &
-         numflds=fldsToIce_num, &
-         flds_scalar_name=flds_scalar_name, &
-         flds_scalar_num=flds_scalar_num, &
-         tag=subname//':CICE_Import',&
-         mesh=Emesh, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call fld_list_realize( &
-         state=ExportState, &
-         fldList=fldsFrIce, &
-         numflds=fldsFrIce_num, &
-         flds_scalar_name=flds_scalar_name, &
-         flds_scalar_num=flds_scalar_num, &
-         tag=subname//':CICE_Export',&
-         mesh=Emesh, rc=rc)
+    call ice_realize_fields(gcomp, Emesh, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------
@@ -912,28 +733,17 @@ contains
     ! Create cice export state
     !-----------------------------------------------------------------
 
-    ! First allocate memory
-    nflds_i2x = shr_string_listGetNum(flds_i2x)
-    nflds_x2i = shr_string_listGetNum(flds_x2i)
-    allocate(i2x(nflds_i2x,lsize))
-    allocate(x2i(nflds_x2i,lsize))
-
-    ! Pack export state -  copy from i2x to exportState and  Set the coupling scalars
-
-    call ice_export (i2x)
-
-    call shr_nuopc_grid_ArrayToState(i2x, flds_i2x, exportState, grid_option='mesh', rc=rc)
+    call ice_export (exportstate, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call shr_nuopc_methods_State_SetScalar(dble(nx_global), flds_scalar_index_nx, exportState, &
          flds_scalar_name, flds_scalar_num, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
     call shr_nuopc_methods_State_SetScalar(dble(ny_global), flds_scalar_index_ny, exportState, &
          flds_scalar_name, flds_scalar_num, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! TODO: fill in iceberg_prognostic as .false.
+    ! TODO (mvertens, 2018-12-21): fill in iceberg_prognostic as .false.
 
     !--------------------------------
     ! diagnostics
@@ -1085,10 +895,8 @@ contains
     call t_startf ('cice_run_import')
     call ice_timer_start(timer_cplrecv)
 
-    call shr_nuopc_grid_StateToArray(importState, x2i, flds_x2i, grid_option='mesh', rc=rc)
+    call ice_import(importState, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ice_import( x2i )
 
     call ice_timer_stop(timer_cplrecv)
     call t_stopf ('cice_run_import')
@@ -1164,16 +972,13 @@ contains
     call t_startf ('cice_run_export')
     call ice_timer_start(timer_cplsend)
 
-    call ice_export(i2x)
-
-    call shr_nuopc_grid_ArrayToState(i2x, flds_i2x, exportState, grid_option='mesh', rc=rc)
+    call ice_export(exportState, rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ice_timer_stop(timer_cplsend)
     call t_stopf ('cice_run_export')
 
     ! reset shr logging to my original values
-
     call shr_file_setLogUnit (shrlogunit)
     call shr_file_setLogLevel(shrloglev)
 
@@ -1343,144 +1148,5 @@ contains
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
 
   end subroutine ModelFinalize
-
-  !===============================================================================
-
-  subroutine fld_list_add(num, fldlist, stdname, flds_concat)
-
-    use ESMF, only : ESMF_LogWrite, ESMF_LOGMSG_ERROR
-
-    integer,                    intent(inout) :: num
-    type(fld_list_type),        intent(inout) :: fldlist(:)
-    character(len=*),           intent(in)    :: stdname
-    character(len=*), optional, intent(inout) :: flds_concat
-
-    ! local variables
-    integer :: rc
-    integer :: dbrc
-    character(len=*), parameter :: subname='(dshr_nuopc_mod:fld_list_add)'
-    !-------------------------------------------------------------------------------
-
-    ! Set up a list of field information
-
-    num = num + 1
-    if (num > fldsMax) then
-      call ESMF_LogWrite(trim(subname)//": ERROR num > fldsMax "//trim(stdname), &
-        ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__, rc=dbrc)
-      return
-    endif
-    fldlist(num)%stdname = trim(stdname)
-
-    if (present(flds_concat)) then
-       if (len_trim(flds_concat) + len_trim(stdname) + 1 >= len(flds_concat)) then
-          call ESMF_LogWrite(subname//': ERROR: max len of flds_concat has been exceeded', &
-               ESMF_LOGMSG_ERROR, line=__LINE__, file= u_FILE_u, rc=dbrc)
-       end if
-       if (trim(flds_concat) == '') then
-          flds_concat = trim(stdname)
-       else
-          flds_concat = trim(flds_concat)//':'//trim(stdname)
-       end if
-    end if
-
-  end subroutine fld_list_add
-
-  !===============================================================================
-
-  subroutine fld_list_realize(state, fldList, numflds, flds_scalar_name, flds_scalar_num, mesh, tag, rc)
-
-    use NUOPC , only : NUOPC_IsConnected, NUOPC_Realize
-    use ESMF  , only : ESMF_MeshLoc_Element, ESMF_FieldCreate, ESMF_TYPEKIND_R8
-    use ESMF  , only : ESMF_MAXSTR, ESMF_Field, ESMF_State, ESMF_Mesh, ESMF_StateRemove
-    use ESMF  , only : ESMF_LogFoundError, ESMF_LOGMSG_INFO, ESMF_SUCCESS
-    use ESMF  , only : ESMF_LogWrite, ESMF_LOGMSG_ERROR, ESMF_LOGERR_PASSTHRU
-    use ESMF  , only : ESMF_VM
-
-    type(ESMF_State)    , intent(inout) :: state
-    type(fld_list_type) , intent(in)    :: fldList(:)
-    integer             , intent(in)    :: numflds
-    character(len=*)    , intent(in)    :: flds_scalar_name
-    integer             , intent(in)    :: flds_scalar_num
-    character(len=*)    , intent(in)    :: tag
-    type(ESMF_Mesh)     , intent(in)    :: mesh
-    integer             , intent(inout) :: rc
-
-    ! local variables
-    integer                :: dbrc
-    integer                :: n
-    type(ESMF_Field)       :: field
-    character(len=80)      :: stdname
-    character(len=*),parameter  :: subname='(dshr_nuopc_mod:fld_list_realize)'
-    ! ----------------------------------------------
-
-    rc = ESMF_SUCCESS
-
-    do n = 1, numflds
-       stdname = fldList(n)%stdname
-       if (NUOPC_IsConnected(state, fieldName=stdname)) then
-          if (stdname == trim(flds_scalar_name)) then
-             call ESMF_LogWrite(trim(subname)//trim(tag)//" Field = "//trim(stdname)//" is connected on root pe", &
-                  ESMF_LOGMSG_INFO, rc=dbrc)
-             ! Create the scalar field
-             call SetScalarField(field, flds_scalar_name, flds_scalar_num, rc=rc)
-             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-          else
-             call ESMF_LogWrite(trim(subname)//trim(tag)//" Field = "//trim(stdname)//" is connected using mesh", &
-                  ESMF_LOGMSG_INFO, rc=dbrc)
-             ! Create the field
-             field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-          endif
-
-          ! NOW call NUOPC_Realize
-          call NUOPC_Realize(state, field=field, rc=rc)
-          if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-       else
-          if (stdname /= trim(flds_scalar_name)) then
-             call ESMF_LogWrite(subname // trim(tag) // " Field = "// trim(stdname) // " is not connected.", &
-                  ESMF_LOGMSG_INFO, rc=dbrc)
-             call ESMF_StateRemove(state, (/stdname/), rc=rc)
-             if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-          end if
-       end if
-    end do
-
-  contains  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    subroutine SetScalarField(field, flds_scalar_name, flds_scalar_num, rc)
-      ! ----------------------------------------------
-      ! create a field with scalar data on the root pe
-      ! ----------------------------------------------
-      use ESMF, only : ESMF_Field, ESMF_DistGrid, ESMF_Grid
-      use ESMF, only : ESMF_DistGridCreate, ESMF_GridCreate, ESMF_LogFoundError, ESMF_LOGERR_PASSTHRU
-      use ESMF, only : ESMF_FieldCreate, ESMF_GridCreate, ESMF_TYPEKIND_R8
-
-      type(ESMF_Field) , intent(inout) :: field
-      character(len=*) , intent(in)    :: flds_scalar_name
-      integer          , intent(in)    :: flds_scalar_num
-      integer          , intent(inout) :: rc
-
-      ! local variables
-      type(ESMF_Distgrid) :: distgrid
-      type(ESMF_Grid)     :: grid
-      character(len=*), parameter :: subname='(dshr_nuopc_mod:SetScalarField)'
-      ! ----------------------------------------------
-
-      rc = ESMF_SUCCESS
-
-      ! create a DistGrid with a single index space element, which gets mapped onto DE 0.
-      distgrid = ESMF_DistGridCreate(minIndex=(/1/), maxIndex=(/1/), rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-
-      grid = ESMF_GridCreate(distgrid, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-
-      field = ESMF_FieldCreate(name=trim(flds_scalar_name), grid=grid, typekind=ESMF_TYPEKIND_R8, &
-           ungriddedLBound=(/1/), ungriddedUBound=(/flds_scalar_num/), rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-
-    end subroutine SetScalarField
-
-  end subroutine fld_list_realize
 
 end module ice_comp_nuopc
