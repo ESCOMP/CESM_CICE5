@@ -15,6 +15,8 @@ module ice_import_export
   use ice_flux              , only : strairxt, strairyt, strocnxt, strocnyt
   use ice_flux              , only : alvdr, alidr, alvdf, alidf, Tref, Qref, Uref
   use ice_flux              , only : flat, fsens, flwout, evap, fswabs, fhocn, fswthru
+  use ice_flux              , only : fswthruvdr, fswthruvdf, fswthruidr, fswthruidf 
+  use ice_flux              , only : send_i2x_per_cat, fswthrun_ai
   use ice_flux              , only : fresh, fsalt, zlvl, uatm, vatm, potT, Tair, Qa
   use ice_flux              , only : rhoa, swvdr, swvdf, swidr, swidf, flw, frain
   use ice_flux              , only : fsnow, uocn, vocn, sst, ss_tltx, ss_tlty, frzmlt
@@ -22,7 +24,6 @@ module ice_import_export
   use ice_flux              , only : faero_atm, faero_ocn
   use ice_flux              , only : fiso_atm, fiso_ocn, fiso_rain, fiso_evap
   use ice_flux              , only : Qa_iso, Qref_iso, HDO_ocn, H2_18O_ocn, H2_16O_ocn
-  use ice_flux              , only : send_i2x_per_cat, fswthrun_ai
   use ice_ocean             , only : tfrz_option
   use ice_atmo              , only : Cdn_atm
   use ice_state             , only : vice, vsno, aice, aicen_init, trcr
@@ -54,7 +55,7 @@ module ice_import_export
 
   private :: fldlist_add
   private :: fldlist_realize
-  private :: state_fldchk
+  private :: state_FldChk
 
   interface state_getfldptr 
      module procedure state_getfldptr_1d
@@ -83,12 +84,9 @@ module ice_import_export
 #else
   logical, parameter :: rasm_snowrain_split = .false.
 #endif
-   integer     ,parameter :: dbug = 10 ! i/o debug messages
-   integer     ,parameter :: debug = 0 ! internal debug level
-   character(*),parameter :: F01 = "('(ice_import_export) ',a, i8,2x,i8,2x,d21.14)"
-
-  character(*), parameter :: u_FILE_u = &
-       __FILE__
+   integer     , parameter :: dbug = 10        ! i/o debug messages
+   character(*), parameter :: u_FILE_u = &
+        __FILE__
 
 !==============================================================================
 contains
@@ -220,6 +218,14 @@ contains
     ! ice/ocn fluxes computed by ice
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_melth' )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen' )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen_vdr')
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen_vdf')
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen_idr')
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen_idf')
+    if (send_i2x_per_cat) then
+       call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen_ifrac_n', &
+            ungridded_lbound=1, ungridded_ubound=ncat)
+    end if
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_meltw' )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_salt'  )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_taux'  )
@@ -227,10 +233,6 @@ contains
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_bcpho' )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_bcphi' )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_flxdst')
-    if (send_i2x_per_cat) then
-       call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_swpen_ifrac_n', &
-            ungridded_lbound=1, ungridded_ubound=ncat)
-    end if
     if (flds_wiso) then
        call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_HDO'     )
        call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_16O'     )
@@ -754,70 +756,6 @@ contains
     !$OMP END PARALLEL DO
     call t_stopf ('cice_imp_atm')
 
-    !-----------------------------------------------------------------
-    ! debug output
-    !-----------------------------------------------------------------
-
-    if (debug > 0 .and. my_task==master_task) then
-       n = 0
-       do iblk = 1, nblocks
-          this_block = get_block(blocks_ice(iblk),iblk)
-          ilo = this_block%ilo; ihi = this_block%ihi
-          jlo = this_block%jlo; jhi = this_block%jhi
-          do j = jlo, jhi
-             do i = ilo, ihi
-                n = n+1
-                write(nu_diag,F01)'import: istep, n, So_dhdx       = ',istep1,n,dataPtr_So_dhdx(n)
-                write(nu_diag,F01)'import: istep, n, So_dhdy       = ',istep1,n,dataPtr_So_dhdy(n)
-                write(nu_diag,F01)'import: istep, n, So_t          = ',istep1,n,dataPtr_So_t(n)
-                write(nu_diag,F01)'import: istep, n, So_s          = ',istep1,n,dataPtr_So_s(n)
-                write(nu_diag,F01)'import: istep, n, So_u          = ',istep1,n,dataPtr_so_u(n)
-                write(nu_diag,F01)'import: istep, n, So_v          = ',istep1,n,dataPtr_So_v(n)
-                write(nu_diag,F01)'import: istep, n, Sa_u          = ',istep1,n,dataPtr_Sa_u(n)
-                write(nu_diag,F01)'import: istep, n, Sa_v          = ',istep1,n,dataPtr_Sa_v(n)
-                write(nu_diag,F01)'import: istep, n, Sa_z          = ',istep1,n,dataPtr_Sa_z(n)
-                write(nu_diag,F01)'import: istep, n, Sa_ptem       = ',istep1,n,dataPtr_Sa_ptem(n)
-                write(nu_diag,F01)'import: istep, n, Sa_tbot       = ',istep1,n,dataPtr_Sa_tbot(n)
-                write(nu_diag,F01)'import: istep, n, Sa_shum       = ',istep1,n,dataPtr_Sa_shum(n)
-                write(nu_diag,F01)'import: istep, n, Sa_dens       = ',istep1,n,dataPtr_Sa_dens(n)
-                write(nu_diag,F01)'import: istep, n, Fioo_q        = ',istep1,n,dataPtr_Fioo_q(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swvdr    = ',istep1,n,dataPtr_Faxa_swvdr(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swndr    = ',istep1,n,dataPtr_Faxa_swndr(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swvdf    = ',istep1,n,dataPtr_Faxa_swvdf(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_swndf    = ',istep1,n,dataPtr_Faxa_swndf(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_lwdn     = ',istep1,n,dataPtr_Faxa_lwdn(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_rain     = ',istep1,n,dataPtr_Faxa_rain(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_snow     = ',istep1,n,dataPtr_Faxa_snow(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_bcphodry = ',istep1,n,dataPtr_Faxa_bcphodry(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_bcphidry = ',istep1,n,dataPtr_Faxa_bcphidry(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_bcphiwet = ',istep1,n,dataPtr_Faxa_bcphiwet(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet1  = ',istep1,n,dataPtr_Faxa_dstwet1(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry1  = ',istep1,n,dataPtr_Faxa_dstdry1(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet2  = ',istep1,n,dataPtr_Faxa_dstwet2(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry2  = ',istep1,n,dataPtr_Faxa_dstdry2(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet3  = ',istep1,n,dataPtr_Faxa_dstwet3(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry3  = ',istep1,n,dataPtr_Faxa_dstdry3(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstwet4  = ',istep1,n,dataPtr_Faxa_dstwet4(n)
-                write(nu_diag,F01)'import: istep, n, Faxa_dstdry4  = ',istep1,n,dataPtr_Faxa_dstdry4(n)
-                if (State_FldChk(importState, 'shum_HDO')) then
-                   write(nu_diag,F01)'import: istep, n, Faxa_rain_HDO = ',istep1,n,dataPtr_Faxa_rain_HDO(n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_rain_16O = ',istep1,n,dataPtr_Faxa_rain_16O(n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_rain_18O = ',istep1,n,dataPtr_Faxa_rain_18O(n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_snow_HDO = ',istep1,n,dataPtr_Faxa_snow_HDO(n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_snow_16O = ',istep1,n,dataPtr_Faxa_snow_16O(n)
-                   write(nu_diag,F01)'import: istep, n, Faxa_snow_18O = ',istep1,n,dataPtr_Faxa_snow_18O(n)
-                   write(nu_diag,F01)'import: istep, n, Sa_shum_HDO   = ',istep1,n,dataPtr_Sa_shum_HDO(n)
-                   write(nu_diag,F01)'import: istep, n, Sa_shum_16O   = ',istep1,n,dataPtr_Sa_shum_16O(n)
-                   write(nu_diag,F01)'import: istep, n, Sa_shum_18O   = ',istep1,n,dataPtr_Sa_shum_18O(n)
-                   write(nu_diag,F01)'import: istep, n, So_roce_HDO   = ',istep1,n,dataPtr_So_roce_HDO(n)
-                   write(nu_diag,F01)'import: istep, n, So_roce_16O   = ',istep1,n,dataPtr_So_roce_16O(n)
-                   write(nu_diag,F01)'import: istep, n, So_roce_18O   = ',istep1,n,dataPtr_So_roce_18O(n)
-                end if
-             end do
-          end do
-       end do
-    end if
-
   end subroutine ice_import
 
   !===============================================================================
@@ -857,6 +795,10 @@ contains
     real(kind=dbl_kind), pointer :: dataPtr_Faii_swnet(:)
     real(kind=dbl_kind), pointer :: dataPtr_Fioi_melth(:)
     real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen(:)
+    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_vdr(:)
+    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_vdf(:)
+    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_idr(:)
+    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_idf(:)
     real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_ifrac_n(:,:)
     real(kind=dbl_kind), pointer :: dataPtr_Fioi_meltw(:)
     real(kind=dbl_kind), pointer :: dataPtr_Fioi_salt(:)
@@ -895,6 +837,7 @@ contains
     rc = ESMF_SUCCESS
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
 
+    ! export states
     call State_getFldPtr(exportState, 'Si_imask',  dataPtr_Si_imask ,rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     call State_getFldPtr(exportState, 'Si_ifrac',  dataPtr_Si_ifrac ,rc=rc)
@@ -938,6 +881,7 @@ contains
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
+    ! fluxes to atmosphere
     call State_getFldPtr(exportState, 'Faii_taux',	dataPtr_Faii_taux      ,rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     call State_getFldPtr(exportState, 'Faii_tauy',	dataPtr_Faii_tauy      ,rc=rc)
@@ -952,10 +896,24 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     call State_getFldPtr(exportState, 'Faii_swnet',	dataPtr_Faii_swnet     ,rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! fluxes to ocean
     call State_getFldPtr(exportState, 'Fioi_melth',	dataPtr_Fioi_melth     ,rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     call State_getFldPtr(exportState, 'Fioi_swpen',	dataPtr_Fioi_swpen     ,rc=rc) 
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call State_getFldPtr(exportState, 'Fioi_swpen_vdr',	dataPtr_Fioi_swpen_vdr  ,rc=rc) 
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call State_getFldPtr(exportState, 'Fioi_swpen_vdf',	dataPtr_Fioi_swpen_vdf  ,rc=rc) 
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call State_getFldPtr(exportState, 'Fioi_swpen_idr',	dataPtr_Fioi_swpen_idr  ,rc=rc) 
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call State_getFldPtr(exportState, 'Fioi_swpen_idf',	dataPtr_Fioi_swpen_idf  ,rc=rc) 
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (State_FldChk(exportState, 'Fioi_swpen_ifrac_n')) then 
+       call State_getFldPtr(exportState, 'Fioi_swpen_ifrac_n', dataPtr_Fioi_swpen_ifrac_n ,rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
     call State_getFldPtr(exportState, 'Fioi_meltw',	dataPtr_Fioi_meltw     ,rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     call State_getFldPtr(exportState, 'Fioi_salt',	dataPtr_Fioi_salt      ,rc=rc)
@@ -982,10 +940,6 @@ contains
        call State_getFldPtr(exportState, 'Faii_evap_16O',	dataPtr_Faii_evap_16O  ,rc=rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
        call State_getFldPtr(exportState, 'Faii_evap_18O',	dataPtr_Faii_evap_18O  ,rc=rc)  
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
-    if (State_FldChk(exportState, 'Fioi_swpen_ifrac_n')) then 
-       call State_getFldPtr(exportState, 'Fioi_swpen_ifrac_n', dataPtr_Fioi_swpen_ifrac_n ,rc=rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
@@ -1117,7 +1071,7 @@ contains
                    endif
                 endif
 
-                !--- a/i fluxes computed by ice
+                !--- ice/atm fluxes computed by ice
                 dataPtr_Faii_taux(n)  = tauxa(i,j,iblk)
                 dataPtr_Faii_tauy(n)  = tauya(i,j,iblk)
                 dataPtr_Faii_lat(n)   = flat(i,j,iblk)
@@ -1126,14 +1080,19 @@ contains
                 dataPtr_Faii_evap(n)  = evap(i,j,iblk)
                 dataPtr_Faii_swnet(n) = fswabs(i,j,iblk)
 
-                !--- i/o fluxes computed by ice
-                dataPtr_Fioi_melth(n) = fhocn(i,j,iblk)
-                dataPtr_Fioi_swpen(n) = fswthru(i,j,iblk) ! hf from melting
-                dataPtr_Fioi_meltw(n) = fresh(i,j,iblk)   ! h2o flux from melting
-                dataPtr_Fioi_salt(n)  = fsalt(i,j,iblk)   ! salt flux from melting
-                dataPtr_Fioi_taux(n)  = tauxo(i,j,iblk)   ! stress n i/o zonal
-                dataPtr_Fioi_tauy(n)  = tauyo(i,j,iblk)   ! stress n i/o meridional
+                !--- ice/ocn fluxes computed by ice
+                dataPtr_Fioi_swpen(n)     = fswthru(i,j,iblk)    ! flux of shortwave through ice to ocean
+                dataPtr_Fioi_swpen_vdr(n) = fswthruvdr(i,j,iblk) ! flux of vis dir shortwave through ice to ocean
+                dataPtr_Fioi_swpen_vdf(n) = fswthruvdf(i,j,iblk) ! flux of vis dif shortwave through ice to ocean
+                dataPtr_Fioi_swpen_idr(n) = fswthruidr(i,j,iblk) ! flux of ir dir  shortwave through ice to ocean
+                dataPtr_Fioi_swpen_idf(n) = fswthruidf(i,j,iblk) ! flux of ir dif  shortwave through ice to ocean
+                dataPtr_Fioi_melth(n)     = fhocn(i,j,iblk)      ! heat exchange with ocean 
+                dataPtr_Fioi_meltw(n)     = fresh(i,j,iblk)      ! fresh water to ocean (h2o flux from melting)
+                dataPtr_Fioi_salt(n)      = fsalt(i,j,iblk)      ! salt to ocean (salt flux from melting)
+                dataPtr_Fioi_taux(n)      = tauxo(i,j,iblk)      ! stress n i/o zonal
+                dataPtr_Fioi_tauy(n)      = tauyo(i,j,iblk)      ! stress n i/o meridional
 
+                ! optional aerosol fluxes to ocean 
                 if (State_FldChk(exportState, 'Fioi_bcpho')) then
                    dataPtr_Fioi_bcpho(n)  = faero_ocn(i,j,1,iblk)  ! hydrophobic bc
                 end if
@@ -1143,6 +1102,8 @@ contains
                 if (State_FldChk(exportState, 'Fioi_flxdst')) then
                    dataPtr_Fioi_flxdst(n)  = faero_ocn(i,j,3,iblk)  ! dust
                 end if
+
+                ! optional water isotope fluxes to ocean 
                 if (State_FldChk(exportState, 'Fioi_meltw_HDO')) then
                    dataPtr_Fioi_meltw_HDO(n) = fiso_ocn (i,j,1,iblk) !  Isotopes to ocean
                    dataPtr_Fioi_meltw_16O(n) = fiso_ocn (i,j,2,iblk) !  Isotopes to ocean
@@ -1193,76 +1154,6 @@ contains
        enddo          !iblk
     end if ! send_i2x_per_cat
 
-    !-----------------------------------------------------------------
-    ! Debug output
-    !-----------------------------------------------------------------
-
-    if (debug > 0 .and. my_task==master_task) then
-       n=0
-       do iblk = 1, nblocks
-          this_block = get_block(blocks_ice(iblk),iblk)
-          ilo = this_block%ilo; ihi = this_block%ihi
-          jlo = this_block%jlo; jhi = this_block%jhi
-          do j = jlo, jhi
-             do i = ilo, ihi
-                n = n+1
-
-                !--- ice states
-                write(nu_diag,F01)'export: istep, n, Si_imask   = ',istep1,n,dataPtr_Si_imask(n)
-                write(nu_diag,F01)'export: istep, n, Si_ifrac   = ',istep1,n,dataPtr_Si_ifrac(n)
-                write(nu_diag,F01)'export: istep, n, Si_t       = ',istep1,n,dataPtr_Si_t(n)
-                write(nu_diag,F01)'export: istep, n, Si_avsdr   = ',istep1,n,dataPtr_Si_avsdr(n)
-                write(nu_diag,F01)'export: istep, n, Si_anidr   = ',istep1,n,dataPtr_Si_anidr(n)
-                write(nu_diag,F01)'export: istep, n, Si_avsdf   = ',istep1,n,dataPtr_Si_avsdf(n)
-                write(nu_diag,F01)'export: istep, n, Si_anidf   = ',istep1,n,dataPtr_Si_anidf(n)
-                write(nu_diag,F01)'export: istep, n, Si_u10     = ',istep1,n,dataPtr_Si_u10(n)
-                write(nu_diag,F01)'export: istep, n, Si_tref    = ',istep1,n,dataPtr_Si_tref(n)
-                write(nu_diag,F01)'export: istep, n, Si_qref    = ',istep1,n,dataPtr_Si_qref(n)
-                write(nu_diag,F01)'export: istep, n, Si_snowh   = ',istep1,n,dataPtr_Si_snowh(n)
-
-                !--- a/i fluxes computed by ice
-                write(nu_diag,F01)'export: istep, n, Faii_taux  = ',istep1,n,dataPtr_Faii_taux(n)
-                write(nu_diag,F01)'export: istep, n, Faii_tauy  = ',istep1,n,dataPtr_Faii_tauy(n)
-                write(nu_diag,F01)'export: istep, n, Faii_lat   = ',istep1,n,dataPtr_Faii_lat(n)
-                write(nu_diag,F01)'export: istep, n, Faii_sen   = ',istep1,n,dataPtr_Faii_sen(n)
-                write(nu_diag,F01)'export: istep, n, Faii_lwup  = ',istep1,n,dataPtr_Faii_lwup(n)
-                write(nu_diag,F01)'export: istep, n, Faii_evap  = ',istep1,n,dataPtr_Faii_evap(n)
-                write(nu_diag,F01)'export: istep, n, Faii_swnet = ',istep1,n,dataPtr_Faii_swnet(n)
-
-                !--- i/o fluxes computed by ice
-                write(nu_diag,F01)'export: istep, n, Fioi_melth = ',istep1,n,dataPtr_Fioi_melth(n)
-                write(nu_diag,F01)'export: istep, n, Fioi_swpen = ',istep1,n,dataPtr_Fioi_swpen(n)
-                write(nu_diag,F01)'export: istep, n, Fioi_meltw = ',istep1,n,dataPtr_Fioi_meltw(n)
-                write(nu_diag,F01)'export: istep, n, Fioi_salt  = ',istep1,n,dataPtr_Fioi_salt(n)
-                write(nu_diag,F01)'export: istep, n, Fioi_taux  = ',istep1,n,dataPtr_Fioi_taux(n)
-                write(nu_diag,F01)'export: istep, n, Fioi_tauy  = ',istep1,n,dataPtr_Fioi_tauy(n)
-                if (State_FldChk(exportState, 'Fioi_bchpo')) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_bcpho  = ',istep1,n,dataPtr_Fioi_bcpho(n)
-                end if
-                if (State_FldChk(exportState, 'Fioi_bchpi')) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_bcphi  = ',istep1,n,dataPtr_Fioi_bcpho(n)
-                end if
-                if (State_FldChk(exportState, 'Fioi_flxdst')) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_flxdst = ',istep1,n,dataPtr_Fioi_flxdst(n)
-                end if
-                if (State_FldChk(exportState, 'Fioi_HDO')) then
-                   write(nu_diag,F01)'export: istep, n, Fioi_HDO      = ',istep1,n,dataPtr_Fioi_meltw_HDO(n)
-                   write(nu_diag,F01)'export: istep, n, Fioi_16O      = ',istep1,n,dataPtr_Fioi_meltw_16O(n)
-                   write(nu_diag,F01)'export: istep, n, Fioi_18O      = ',istep1,n,dataPtr_Fioi_meltw_18O(n)
-                   write(nu_diag,F01)'export: istep, n, Faii_evap_HDO = ',istep1,n,dataPtr_Faii_evap_HDO(n)
-                   write(nu_diag,F01)'export: istep, n, Faii_evap_16O = ',istep1,n,dataPtr_Faii_evap_16O(n)
-                   write(nu_diag,F01)'export: istep, n, Faii_evap_18O = ',istep1,n,dataPtr_Faii_evap_18O(n)
-                   write(nu_diag,F01)'export: istep, n, Si_qref_HDO   = ',istep1,n,dataPtr_Si_qref_HDO(n)
-                   write(nu_diag,F01)'export: istep, n, Si_qref_16O   = ',istep1,n,dataPtr_Si_qref_16O(n)
-                   write(nu_diag,F01)'export: istep, n, Si_qref_18O   = ',istep1,n,dataPtr_Si_qref_18O(n)
-                end if
-             end do
-          end do
-       end do
-    end if
-
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
-
   end subroutine ice_export
 
   !===============================================================================
@@ -1299,12 +1190,12 @@ contains
 
   subroutine fldlist_realize(state, fldList, numflds, flds_scalar_name, flds_scalar_num, mesh, tag, rc)
 
-    use NUOPC , only : NUOPC_IsConnected, NUOPC_Realize
-    use ESMF  , only : ESMF_MeshLoc_Element, ESMF_FieldCreate, ESMF_TYPEKIND_R8
-    use ESMF  , only : ESMF_MAXSTR, ESMF_Field, ESMF_State, ESMF_Mesh, ESMF_StateRemove
-    use ESMF  , only : ESMF_LogFoundError, ESMF_LOGMSG_INFO, ESMF_SUCCESS
-    use ESMF  , only : ESMF_LogWrite, ESMF_LOGMSG_ERROR, ESMF_LOGERR_PASSTHRU
-    use ESMF  , only : ESMF_VM
+    use NUOPC, only : NUOPC_IsConnected, NUOPC_Realize
+    use ESMF , only : ESMF_MeshLoc_Element, ESMF_FieldCreate, ESMF_TYPEKIND_R8
+    use ESMF , only : ESMF_MAXSTR, ESMF_Field, ESMF_State, ESMF_Mesh, ESMF_StateRemove
+    use ESMF , only : ESMF_LogFoundError, ESMF_LOGMSG_INFO, ESMF_SUCCESS
+    use ESMF , only : ESMF_LogWrite, ESMF_LOGMSG_ERROR, ESMF_LOGERR_PASSTHRU
+    use ESMF , only : ESMF_VM
 
     ! input/output variables
     type(ESMF_State)    , intent(inout) :: state
