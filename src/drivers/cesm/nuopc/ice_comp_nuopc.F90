@@ -253,7 +253,7 @@ contains
     integer                 :: num_ice
     integer                 :: num_elim_gcells    ! local number of eliminated gridcells
     integer                 :: num_elim_blocks    ! local number of eliminated blocks
-    integer                 :: num_total_blocks 
+    integer                 :: num_total_blocks
     integer                 :: my_elim_start, my_elim_end
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
@@ -578,7 +578,7 @@ contains
                 if (num_elim_blocks >= my_elim_start .and. num_elim_blocks <= my_elim_end) then
                    this_block = get_block(globalID, globalID)
                    num_elim_gcells = num_elim_gcells + &
-                        (this_block%jhi-this_block%jlo+1) * (this_block%ihi-this_block%ilo+1) 
+                        (this_block%jhi-this_block%jlo+1) * (this_block%ihi-this_block%ilo+1)
                 end if
              end if
           end do

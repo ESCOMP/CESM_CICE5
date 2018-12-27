@@ -15,7 +15,7 @@ module ice_import_export
   use ice_flux              , only : strairxt, strairyt, strocnxt, strocnyt
   use ice_flux              , only : alvdr, alidr, alvdf, alidf, Tref, Qref, Uref
   use ice_flux              , only : flat, fsens, flwout, evap, fswabs, fhocn, fswthru
-  use ice_flux              , only : fswthruvdr, fswthruvdf, fswthruidr, fswthruidf 
+  use ice_flux              , only : fswthruvdr, fswthruvdf, fswthruidr, fswthruidf
   use ice_flux              , only : send_i2x_per_cat, fswthrun_ai
   use ice_flux              , only : fresh, fsalt, zlvl, uatm, vatm, potT, Tair, Qa
   use ice_flux              , only : rhoa, swvdr, swvdf, swidr, swidf, flw, frain
@@ -36,7 +36,7 @@ module ice_import_export
   use shr_nuopc_scalars_mod , only : flds_scalar_index_nx
   use shr_nuopc_scalars_mod , only : flds_scalar_index_ny
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_chkerr
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_state_reset 
+  use shr_nuopc_methods_mod , only : shr_nuopc_methods_state_reset
   use perf_mod              , only : t_startf, t_stopf, t_barrierf
 
   implicit none
@@ -51,7 +51,7 @@ module ice_import_export
   private :: fldlist_realize
   private :: state_FldChk
 
-  interface state_getfldptr 
+  interface state_getfldptr
      module procedure state_getfldptr_1d
      module procedure state_getfldptr_2d
      module procedure state_getfldptr_3d
@@ -102,7 +102,7 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    integer       :: n 
+    integer       :: n
     character(CS) :: stdname
     character(CS) :: cvalue
     logical       :: flds_wiso         ! use case
@@ -830,15 +830,15 @@ contains
     call state_setexport(exportState, 'Si_snowh' , input=tempfld , lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! ------ 
+    ! ------
     ! ice/atm fluxes computed by ice
-    ! ------ 
+    ! ------
 
-    ! Zonal air/ice stress 
+    ! Zonal air/ice stress
     call state_setexport(exportState, 'Faii_taux' , input=tauxa, lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! Meridional air/ice stress 
+    ! Meridional air/ice stress
     call state_setexport(exportState, 'Faii_tauy' , input=tauya, lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -862,9 +862,9 @@ contains
     call state_setexport(exportState, 'Faii_swnet' , input=fswabs, lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! ------ 
+    ! ------
     ! ice/ocn fluxes computed by ice
-    ! ------ 
+    ! ------
 
     ! flux of shortwave through ice to ocean
     call state_setexport(exportState, 'Fioi_swpen' , input=fswthru, lmask=tmask, ifrac=ailohi, rc=rc)
@@ -886,7 +886,7 @@ contains
     call state_setexport(exportState, 'Fioi_swpen_idf' , input=fswthruidf, lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! heat exchange with ocean 
+    ! heat exchange with ocean
     call state_setexport(exportState, 'Fioi_melth' , input=fhocn, lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -905,10 +905,10 @@ contains
     ! stress n i/o meridional
     call state_setexport(exportState, 'Fioi_tauy' , input=tauyo, lmask=tmask, ifrac=ailohi, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    
-    ! ------ 
-    ! optional aerosol fluxes to ocean 
-    ! ------ 
+
+    ! ------
+    ! optional aerosol fluxes to ocean
+    ! ------
 
     ! hydrophobic bc
     if (State_FldChk(exportState, 'Fioi_bcpho')) then
@@ -927,10 +927,10 @@ contains
        call state_setexport(exportState, 'Fioi_flxdst' , input=faero_ocn, index=3, lmask=tmask, ifrac=ailohi, rc=rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
-    
-    ! ------ 
-    ! optional water isotope fluxes to ocean 
-    ! ------ 
+
+    ! ------
+    ! optional water isotope fluxes to ocean
+    ! ------
 
     if (State_FldChk(exportState, 'Fioi_meltw_HDO')) then
        call state_setexport(exportState, 'Fioi_meltw_HDO' , input=fiso_ocn, index=1, lmask=tmask, ifrac=ailohi, rc=rc)
@@ -941,9 +941,9 @@ contains
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
-    ! ------ 
-    ! optional water isotope fluxes to ocean 
-    ! ------ 
+    ! ------
+    ! optional water isotope fluxes to ocean
+    ! ------
 
     if (State_FldChk(exportState, 'Faii_evap_HDO')) then
        !  Isotope evap to atm
@@ -963,9 +963,9 @@ contains
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     endif
 
-    ! ------ 
+    ! ------
     ! optional short wave penetration to ocean ice category
-    ! ------ 
+    ! ------
 
     ! ice fraction by category
     if (State_FldChk(exportState, 'Si_ifrac_n')) then
@@ -984,7 +984,7 @@ contains
                lmask=tmask, ifrac=ailohi, rc=rc)
           if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
        end do
-    end if 
+    end if
 
   end subroutine ice_export
 
@@ -1158,7 +1158,7 @@ contains
     character(len=*)           , intent(in)    :: fldname
     real (kind=dbl_kind)       , intent(inout) :: output(:,:,:,:)
     integer                    , intent(in)    :: index
-    logical, optional          , intent(in)    :: do_sum 
+    logical, optional          , intent(in)    :: do_sum
     integer                    , intent(out)   :: rc
 
     ! local variables
@@ -1174,7 +1174,7 @@ contains
     rc = ESMF_SUCCESS
 
     if (geomtype == ESMF_GEOMTYPE_MESH) then
-       
+
        ! get field pointer
        call state_getfldptr(state, trim(fldname), dataptr1d, rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1198,9 +1198,9 @@ contains
              end do
           end do
        end do
-       
+
     else if (geomtype == ESMF_GEOMTYPE_GRID) then
-       
+
        call state_getfldptr(state, trim(fldname), dataptr3d, rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -1222,7 +1222,7 @@ contains
              end do
           end do
        end do
-       
+
     end if
 
   end subroutine state_getimport_with_index
@@ -1239,7 +1239,7 @@ contains
     type(ESMF_State)           , intent(in)    :: state
     character(len=*)           , intent(in)    :: fldname
     real (kind=dbl_kind)       , intent(inout) :: output(:,:,:)
-    logical, optional          , intent(in)    :: do_sum 
+    logical, optional          , intent(in)    :: do_sum
     integer                    , intent(out)   :: rc
 
     ! local variables
@@ -1255,7 +1255,7 @@ contains
     rc = ESMF_SUCCESS
 
     if (geomtype == ESMF_GEOMTYPE_MESH) then
-       
+
        ! get field pointer
        call state_getfldptr(state, trim(fldname), dataptr1d, rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1279,9 +1279,9 @@ contains
              end do
           end do
        end do
-       
+
     else if (geomtype == ESMF_GEOMTYPE_GRID) then
-       
+
        call state_getfldptr(state, trim(fldname), dataptr3d, rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -1303,7 +1303,7 @@ contains
              end do
           end do
        end do
-       
+
     end if
 
   end subroutine state_getimport_without_index
@@ -1321,8 +1321,8 @@ contains
     character(len=*)    ,           intent(in)    :: fldname
     real(kind=dbl_kind) ,           intent(in)    :: input(:,:,:,:)
     integer             ,           intent(in)    :: index
-    logical             , optional, intent(in)    :: lmask(:,:,:)              
-    real(kind=dbl_kind) , optional, intent(in)    :: ifrac(:,:,:)              
+    logical             , optional, intent(in)    :: lmask(:,:,:)
+    real(kind=dbl_kind) , optional, intent(in)    :: ifrac(:,:,:)
     integer             ,           intent(out)   :: rc
 
     ! local variables
@@ -1352,7 +1352,7 @@ contains
           do j = jlo, jhi
              do i = ilo, ihi
                 n = n+1
-                if (present(lmask) .and. present(ifrac)) then 
+                if (present(lmask) .and. present(ifrac)) then
                    if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
                       dataPtr1d(n) = input(i,j,index,iblk)
                    end if
@@ -1378,7 +1378,7 @@ contains
              do i = ilo,ihi
                 i1 = i - ilo + 1
                 j1 = j - jlo + 1
-                if (present(lmask) .and. present(ifrac)) then 
+                if (present(lmask) .and. present(ifrac)) then
                    if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
                       dataPtr3d(i1,j1,iblk) = input(i,j,index,iblk)
                    end if
@@ -1404,8 +1404,8 @@ contains
     type(ESMF_State)               , intent(inout) :: state
     character(len=*)               , intent(in)    :: fldname
     real(kind=dbl_kind)            , intent(in)    :: input(:,:,:)
-    logical             , optional , intent(in)    :: lmask(:,:,:)              
-    real(kind=dbl_kind) , optional , intent(in)    :: ifrac(:,:,:)              
+    logical             , optional , intent(in)    :: lmask(:,:,:)
+    real(kind=dbl_kind) , optional , intent(in)    :: ifrac(:,:,:)
     integer                        , intent(out)   :: rc
 
     ! local variables
@@ -1436,7 +1436,7 @@ contains
           do j = jlo, jhi
              do i = ilo, ihi
                 n = n+1
-                if (present(lmask) .and. present(ifrac)) then 
+                if (present(lmask) .and. present(ifrac)) then
                    if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
                       dataPtr1d(n) = input(i,j,iblk)
                    end if
@@ -1462,7 +1462,7 @@ contains
              do i = ilo,ihi
                 i1 = i - ilo + 1
                 j1 = j - jlo + 1
-                if (present(lmask) .and. present(ifrac)) then 
+                if (present(lmask) .and. present(ifrac)) then
                    if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
                       dataPtr3d(i1,j1,iblk) = input(i,j,iblk)
                    end if
