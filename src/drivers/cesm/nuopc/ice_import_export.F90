@@ -7,11 +7,11 @@ module ice_import_export
   use shr_sys_mod           , only : shr_sys_abort, shr_sys_flush
   use shr_frz_mod           , only : shr_frz_freezetemp
   use ice_kinds_mod         , only : int_kind, dbl_kind, char_len_long, log_kind
-  use ice_constants         , only : c0, c1, puny, tffresh, spval_dbl
-  use ice_constants         , only : field_loc_center, field_type_scalar
-  use ice_constants         , only : field_type_vector, c100
-  use ice_constants         , only : vonkar, zref, iceruf
+  use ice_constants         , only : c0, c1, tffresh, spval_dbl
+  use ice_constants         , only : field_loc_center, field_type_scalar, field_type_vector
   use ice_blocks            , only : block, get_block, nx_block, ny_block
+  use ice_domain            , only : nblocks, blocks_ice, halo_info, distrb_info
+  use ice_domain_size       , only : nx_global, ny_global, block_size_x, block_size_y, max_blocks, ncat
   use ice_flux              , only : strairxt, strairyt, strocnxt, strocnyt
   use ice_flux              , only : alvdr, alidr, alvdf, alidf, Tref, Qref, Uref
   use ice_flux              , only : flat, fsens, flwout, evap, fswabs, fhocn, fswthru
@@ -20,22 +20,16 @@ module ice_import_export
   use ice_flux              , only : fresh, fsalt, zlvl, uatm, vatm, potT, Tair, Qa
   use ice_flux              , only : rhoa, swvdr, swvdf, swidr, swidf, flw, frain
   use ice_flux              , only : fsnow, uocn, vocn, sst, ss_tltx, ss_tlty, frzmlt
-  use ice_flux              , only : sss, tf, wind, fsw, init_flux_atm, init_flux_ocn
+  use ice_flux              , only : sss, tf, wind, fsw
   use ice_flux              , only : faero_atm, faero_ocn
   use ice_flux              , only : fiso_atm, fiso_ocn, fiso_rain, fiso_evap
   use ice_flux              , only : Qa_iso, Qref_iso, HDO_ocn, H2_18O_ocn, H2_16O_ocn
-  use ice_ocean             , only : tfrz_option
-  use ice_atmo              , only : Cdn_atm
   use ice_state             , only : vice, vsno, aice, aicen_init, trcr
-  use ice_state             , only : tr_aero, tr_iso, tr_iage, tr_FY, tr_pond, tr_lvl
-  use ice_domain            , only : nblocks, blocks_ice, halo_info, distrb_info
-  use ice_domain_size       , only : nx_global, ny_global, block_size_x, block_size_y, max_blocks, ncat
   use ice_grid              , only : tlon, tlat, tarea, tmask, anglet, hm, ocn_gridcell_frac
   use ice_grid              , only : grid_type, t2ugrid_vector
   use ice_boundary          , only : ice_HaloUpdate
   use ice_fileunits         , only : nu_diag
   use ice_communicate       , only : my_task, master_task, MPI_COMM_ICE
-  use ice_calendar          , only : istep, istep1
   use ice_prescribed_mod    , only : prescribed_ice
   use shr_nuopc_scalars_mod , only : flds_scalar_name
   use shr_nuopc_scalars_mod , only : flds_scalar_num
@@ -60,8 +54,21 @@ module ice_import_export
   interface state_getfldptr 
      module procedure state_getfldptr_1d
      module procedure state_getfldptr_2d
+     module procedure state_getfldptr_3d
   end interface state_getfldptr
   private :: state_getfldptr
+
+  interface state_getimport
+     module procedure state_getimport_with_index
+     module procedure state_getimport_without_index
+  end interface state_getimport
+  private :: state_getimport
+
+  interface state_setexport
+     module procedure state_setexport_with_index
+     module procedure state_setexport_without_index
+  end interface state_setexport
+  private :: state_setexport
 
   ! Private module data
 
@@ -71,22 +78,16 @@ module ice_import_export
     integer :: ungridded_ubound = 0
   end type fld_list_type
 
-  integer, parameter     :: fldsMax = 100
-  integer                :: fldsToIce_num = 0
-  integer                :: fldsFrIce_num = 0
-  type (fld_list_type)   :: fldsToIce(fldsMax)
-  type (fld_list_type)   :: fldsFrIce(fldsMax)
+  integer, parameter       :: fldsMax = 100
+  integer                  :: fldsToIce_num = 0
+  integer                  :: fldsFrIce_num = 0
+  type (fld_list_type)     :: fldsToIce(fldsMax)
+  type (fld_list_type)     :: fldsFrIce(fldsMax)
+  type(ESMF_GeomType_Flag) :: geomtype
 
-#ifdef RASM_MODS
-  ! (1)  Andrew Roberts:  Added artificial correction to snow and rain division
-  !      This is to be consistent with VIC in the Regional Arctic System Model
-  logical, parameter :: rasm_snowrain_split = .true.
-#else
-  logical, parameter :: rasm_snowrain_split = .false.
-#endif
-   integer     , parameter :: dbug = 10        ! i/o debug messages
-   character(*), parameter :: u_FILE_u = &
-        __FILE__
+  integer     , parameter :: dbug = 10        ! i/o debug messages
+  character(*), parameter :: u_FILE_u = &
+       __FILE__
 
 !==============================================================================
 contains
@@ -275,6 +276,8 @@ contains
     call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    geomtype = ESMF_GEOMTYPE_MESH
+
     call fldlist_realize( &
          state=ExportState, &
          fldList=fldsFrIce, &
@@ -314,147 +317,8 @@ contains
     real (kind=dbl_kind),allocatable :: aflds(:,:,:,:)
     real (kind=dbl_kind)             :: workx, worky
     real (kind=dbl_kind)             :: MIN_RAIN_TEMP, MAX_SNOW_TEMP
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_tbot(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_shum(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_z(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_dens(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_u(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_v(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_ptem(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_lwdn(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_swvdr(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_swvdf(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_swndr(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_swndf(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_rain(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_snow(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_t(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_s(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_dhdx(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_dhdy(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_u(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_v(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Fioo_q(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_bcphodry(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_bcphidry(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_bcphiwet(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstdry1(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstdry2(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstdry3(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstdry4(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstwet1(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstwet2(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstwet3(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_dstwet4(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_rain_HDO(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_rain_16O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_rain_18O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_snow_HDO(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_snow_16O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Faxa_snow_18O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_shum_HDO(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_shum_16O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_Sa_shum_18O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_roce_HDO(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_roce_16O(:)
-    real (kind=dbl_kind), pointer    :: dataPtr_So_roce_18O(:)
     character(len=*),   parameter    :: subname = 'ice_import'
     !-----------------------------------------------------
-
-    call State_getFldPtr(importState,'Sa_tbot'       ,dataPtr_Sa_tbot       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Sa_shum'       ,dataPtr_Sa_shum       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Sa_z'          ,dataPtr_Sa_z          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Sa_dens'       ,dataPtr_Sa_dens       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Sa_u'          ,dataPtr_Sa_u          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Sa_v'          ,dataPtr_Sa_v          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Sa_ptem'       ,dataPtr_Sa_ptem       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_lwdn'     ,dataPtr_Faxa_lwdn       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_swvdr'    ,dataPtr_Faxa_swvdr    ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_swvdf'    ,dataPtr_Faxa_swvdf    ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_swndr'    ,dataPtr_Faxa_swndr    ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_swndf'    ,dataPtr_Faxa_swndf    ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_rain'     ,dataPtr_Faxa_rain     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_snow'     ,dataPtr_Faxa_snow     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'So_t'          ,dataPtr_So_t          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'So_s'          ,dataPtr_So_s          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'So_dhdx'       ,dataPtr_So_dhdx       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'So_dhdy'       ,dataPtr_So_dhdy       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'So_u'          ,dataPtr_So_u          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'So_v'          ,dataPtr_So_v          ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Fioo_q'        ,dataPtr_Fioo_q        ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_bcphodry' ,dataPtr_Faxa_bcphodry ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_bcphidry' ,dataPtr_Faxa_bcphidry ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_bcphiwet' ,dataPtr_Faxa_bcphiwet ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstdry1'  ,dataPtr_Faxa_dstdry1  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstdry2'  ,dataPtr_Faxa_dstdry2  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstdry3'  ,dataPtr_Faxa_dstdry3  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstdry4'  ,dataPtr_Faxa_dstdry4  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstwet1'  ,dataPtr_Faxa_dstwet1  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstwet2'  ,dataPtr_Faxa_dstwet2  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstwet3'  ,dataPtr_Faxa_dstwet3  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(importState,'Faxa_dstwet4'  ,dataPtr_Faxa_dstwet4  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    if (State_FldChk(importState, 'Sa_shum_HDO')) then
-       call State_getFldPtr(importState,'Sa_shum_HDO'  ,dataPtr_Sa_shum_HDO, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'Sa_shum_18O'  ,dataPtr_Sa_shum_18O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'Sa_shum_16O'  ,dataPtr_Sa_shum_16O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call State_getFldPtr(importState,'So_roce_HDO'  ,dataPtr_So_roce_HDO, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'So_roce_HDO'  ,dataPtr_So_roce_18O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'So_roce_HDO'  ,dataPtr_So_roce_16O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call State_getFldPtr(importState,'Faxa_rain_HDO'  ,dataPtr_Faxa_rain_HDO, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'Faxa_rain_HDO'  ,dataPtr_Faxa_rain_18O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'Faxa_rain_HDO'  ,dataPtr_Faxa_rain_16O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call State_getFldPtr(importState,'Faxa_snow_HDO'  ,dataPtr_Faxa_snow_HDO, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'Faxa_snow_HDO'  ,dataPtr_Faxa_snow_18O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(importState,'Faxa_snow_HDO'  ,dataPtr_Faxa_snow_16O, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
 
     ! Note that the precipitation fluxes received from the mediator
     ! are in units of kg/s/m^2 which is what CICE requires.
@@ -471,34 +335,60 @@ contains
     allocate(aflds(nx_block,ny_block,nflds,nblocks))
     aflds = c0
 
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             aflds(i,j, 1,iblk)   = dataPtr_So_t(n)
-             aflds(i,j, 2,iblk)   = dataPtr_So_s(n)
-             aflds(i,j, 3,iblk)   = dataPtr_Sa_z(n)
-             aflds(i,j, 4,iblk)   = dataPtr_Sa_ptem(n)
-             aflds(i,j, 5,iblk)   = dataPtr_Sa_tbot(n)
-             aflds(i,j, 6,iblk)   = dataPtr_Sa_shum(n)
-             aflds(i,j, 7,iblk)   = dataPtr_Sa_dens(n)
-             aflds(i,j, 8,iblk)   = dataPtr_Fioo_q(n)
-             aflds(i,j, 9,iblk)   = dataPtr_Faxa_swvdr(n)
-             aflds(i,j,10,iblk)   = dataPtr_Faxa_swndr(n)
-             aflds(i,j,11,iblk)   = dataPtr_Faxa_swvdf(n)
-             aflds(i,j,12,iblk)   = dataPtr_Faxa_swndf(n)
-             aflds(i,j,13,iblk)   = dataPtr_Faxa_lwdn(n)
-             aflds(i,j,14,iblk)   = dataPtr_Faxa_rain(n)
-             aflds(i,j,15,iblk)   = dataPtr_Faxa_snow(n)
-          enddo  !i
-       enddo     !j
-    enddo        !iblk
+    ! import ocean states
+
+    call state_getimport(importState, 'So_t', output=aflds, index=1, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'So_s', output=aflds, index=2, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! import ocean states
+
+    call state_getimport(importState, 'Sa_z', output=aflds, index=3, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Sa_ptem', output=aflds, index=4, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Sa_tbot', output=aflds, index=5, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Sa_shum', output=aflds, index=6, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Sa_dens', output=aflds, index=7, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! import ocn/ice fluxes
+
+    call state_getimport(importState, 'Fioo_q', output=aflds, index=8, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! import atm fluxes
+
+    call state_getimport(importState, 'Faxa_swvdr', output=aflds, index=9, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Faxa_swndr', output=aflds, index=10, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Faxa_swvdf', output=aflds, index=11, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Faxa_swndf', output=aflds, index=12, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Faxa_lwdn', output=aflds, index=13, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Faxa_rain', output=aflds, index=14, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Faxa_snow', output=aflds, index=15, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! perform a halo update
 
     if (.not.prescribed_ice) then
        call t_startf ('cice_imp_halo')
@@ -506,10 +396,7 @@ contains
        call t_stopf ('cice_imp_halo')
     endif
 
-    if (rasm_snowrain_split) then
-       MIN_RAIN_TEMP = Tffresh-c1
-       MAX_SNOW_TEMP = Tffresh+c0
-    endif
+    ! now fill in the ice internal data types
 
     !$OMP PARALLEL DO PRIVATE(iblk,i,j)
     do iblk = 1, nblocks
@@ -535,56 +422,30 @@ contains
     enddo        !iblk
     !$OMP END PARALLEL DO
 
-    if (rasm_snowrain_split) then
-       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
-       do iblk = 1, nblocks
-          do j = 1,ny_block
-             do i = 1,nx_block
-                !--- Artificial correction to snow and rain for RASM
-                if (Tair(i,j,iblk)<MIN_RAIN_TEMP) then
-                   fsnow(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
-                   frain(i,j,iblk)=0
-                elseif (Tair(i,j,iblk)>MAX_SNOW_TEMP) then
-                   frain(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
-                   fsnow(i,j,iblk)=0
-                else
-                   frain(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
-                   fsnow(i,j,iblk)=frain(i,j,iblk)
-                   frain(i,j,iblk)=frain(i,j,iblk)*(Tair(i,j,iblk)-MIN_RAIN_TEMP) / &
-                                                   (MAX_SNOW_TEMP-MIN_RAIN_TEMP)
-                   fsnow(i,j,iblk)=fsnow(i,j,iblk)-frain(i,j,iblk)
-                endif
-                !--- end artificial RASM correction
-             enddo    !i
-          enddo    !j
-       enddo        !iblk
-       !$OMP END PARALLEL DO
-    endif  ! rasm_snowrain_split
-
     deallocate(aflds)
     allocate(aflds(nx_block,ny_block,nfldv,nblocks))
     aflds = c0
 
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
+    ! Get velocity fields from ocean and atm and slope fields from ocean
 
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             aflds(i,j, 1,iblk)   = dataPtr_So_u(n)
-             aflds(i,j, 2,iblk)   = dataPtr_So_v(n)
-             aflds(i,j, 3,iblk)   = dataPtr_Sa_u(n)
-             aflds(i,j, 4,iblk)   = dataPtr_Sa_v(n)
-             aflds(i,j, 5,iblk)   = dataPtr_So_dhdx(n)
-             aflds(i,j, 6,iblk)   = dataPtr_So_dhdy(n)
-          enddo
-       enddo
-    enddo
+    call state_getimport(importState, 'So_u', output=aflds, index=1, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'So_v', output=aflds, index=2, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Sa_u', output=aflds, index=3, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'Sa_v', output=aflds, index=4, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'So_dhdx', output=aflds, index=5, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call state_getimport(importState, 'So_dhdy', output=aflds, index=6, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
 
     if (.not.prescribed_ice) then
        call t_startf ('cice_imp_halo')
@@ -610,64 +471,72 @@ contains
     deallocate(aflds)
 
     !-------------------------------------------------------
-    ! Set aerosols from coupler
+    ! Get aerosols from mediator
     !-------------------------------------------------------
 
-    n=0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             faero_atm(i,j,1,iblk) = dataPtr_Faxa_bcphodry(n)
-             faero_atm(i,j,2,iblk) = dataPtr_Faxa_bcphidry(n) + dataPtr_Faxa_bcphiwet(n)
+    if (State_FldChk(importState, 'Faxa_bcphodry')) then
+       call state_getimport(importState, 'Faxa_bcphodry', output=faero_atm,  index=1, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
-             ! Combine all of the dust into one category
-             faero_atm(i,j,3,iblk) = dataPtr_Faxa_dstwet1(n) + dataPtr_Faxa_dstdry1(n) &
-                                   + dataPtr_Faxa_dstwet2(n) + dataPtr_Faxa_dstdry2(n) &
-                                   + dataPtr_Faxa_dstwet3(n) + dataPtr_Faxa_dstdry3(n) &
-                                   + dataPtr_Faxa_dstwet4(n) + dataPtr_Faxa_dstdry4(n)
-          end do
-       end do
-    end do
+    if (State_FldChk(importState, 'Faxa_bcphidry')) then
+       call state_getimport(importState, 'Faxa_bcphidry', output=faero_atm, index=2, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_bcphiwet', output=faero_atm, index=2, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    if (State_FldChk(importState, 'Faxa_dstwet1')) then
+       call state_getimport(importState, 'Faxa_dstwet1', output=faero_atm,  index=3, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstdry1', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstwet2', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstdry2', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstwet3', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstdry3', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstwet4', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_dstdry4', output=faero_atm,  index=3, do_sum=.true., rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     !-------------------------------------------------------
-    ! Water isotopes form the mediator
+    ! Water isotopes from the mediator
     !-------------------------------------------------------
 
     if (State_FldChk(importState, 'shum_HDO')) then
-       n=0
-       do iblk = 1, nblocks
-          this_block = get_block(blocks_ice(iblk),iblk)
-          ilo = this_block%ilo
-          ihi = this_block%ihi
-          jlo = this_block%jlo
-          jhi = this_block%jhi
-          do j = jlo, jhi
-             do i = ilo, ihi
-                n = n+1
-                Qa_iso(i,j,1,iblk)  = dataPtr_Sa_shum_HDO(n)
-                Qa_iso(i,j,2,iblk)  = dataPtr_Sa_shum_16O(n)
-                Qa_iso(i,j,3,iblk)  = dataPtr_Sa_shum_18O(n)
+       call state_getimport(importState, 'Sa_shum_HDO', output=Qa_iso, index=1, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Sa_shum_16O', output=Qa_iso, index=2, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Sa_shum_18O', output=Qa_iso, index=3, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-                fiso_rain(i,j,1,iblk) = dataPtr_Faxa_rain_HDO(n)
-                fiso_rain(i,j,2,iblk) = dataPtr_Faxa_rain_16O(n)
-                fiso_rain(i,j,3,iblk) = dataPtr_Faxa_rain_18O(n)
+       call state_getimport(importState, 'Faxa_rain_HDO', output=fiso_rain, index=1, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_rain_16O', output=fiso_rain, index=2, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_rain_18O', output=fiso_rain, index=3, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-                fiso_atm(i,j,1,iblk) = dataPtr_Faxa_snow_HDO(n)
-                fiso_atm(i,j,2,iblk) = dataPtr_Faxa_snow_16O(n)
-                fiso_atm(i,j,3,iblk) = dataPtr_Faxa_snow_18O(n)
+       call state_getimport(importState, 'Faxa_snow_HDO', output=fiso_atm, index=1, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_snow_16O', output=fiso_atm, index=2, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'Faxa_snow_18O', output=fiso_atm, index=3, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-                HDO_ocn(i,j,iblk)    = dataPtr_So_roce_HDO(n)
-                H2_16O_ocn(i,j,iblk) = dataPtr_So_roce_16O(n)
-                H2_18O_ocn(i,j,iblk) = dataPtr_So_roce_18O(n)
-             enddo  !i
-          enddo     !j
-       enddo        !iblk
+       call state_getimport(importState, 'So_roce_HDO', output=HDO_ocn, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'So_roce_16O', output=H2_16O_ocn, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_getimport(importState, 'So_roce_18O', output=H2_18O_ocn, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
     !-----------------------------------------------------------------
@@ -687,7 +556,6 @@ contains
 
        do j = 1,ny_block
           do i = 1,nx_block
-
              ! ocean
              workx      = uocn  (i,j,iblk) ! currents, m/s
              worky      = vocn  (i,j,iblk)
@@ -706,7 +574,6 @@ contains
              sst(i,j,iblk) = sst(i,j,iblk) - Tffresh       ! sea sfc temp (C)
 
              sss(i,j,iblk) = max(sss(i,j,iblk),c0)
-
           enddo
        enddo
 
@@ -767,53 +634,6 @@ contains
     integer         , intent(out)   :: rc
 
     ! local variables
-    real(kind=dbl_kind), pointer :: dataPtr_Si_imask(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_ifrac(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_ifrac_n(:,:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_t(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_avsdr(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_anidr(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_avsdf(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_anidf(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_u10(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_tref(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_qref(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_snowh(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_vsno(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_vice(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_logz0(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_qref_HDO(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_qref_16O(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Si_qref_18O(:)
-    !
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_taux(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_tauy(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_lat(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_sen(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_lwup(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_evap(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_swnet(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_melth(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_vdr(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_vdf(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_idr(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_idf(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_swpen_ifrac_n(:,:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_meltw(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_salt(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_taux(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_tauy(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_bcpho(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_bcphi(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_flxdst(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_meltw_HDO(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_meltw_16O(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Fioi_meltw_18O(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_evap_HDO(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_evap_16O(:)
-    real(kind=dbl_kind), pointer :: dataPtr_Faii_evap_18O(:)
-    !
     type(block)             :: this_block         ! block information for current block
     integer                 :: i, j, iblk, n      ! incides
     integer                 :: n2                 ! thickness category index
@@ -821,127 +641,21 @@ contains
     real    (kind=dbl_kind) :: workx, worky       ! tmps for converting grid
     integer (kind=int_kind) :: icells             ! number of ocean/ice cells
     logical                 :: flag
+    integer (kind=int_kind) :: indxi (nx_block*ny_block)            ! compressed indices in i
+    integer (kind=int_kind) :: indxj (nx_block*ny_block)            ! compressed indices in i
+    real    (kind=dbl_kind) :: Tsrf  (nx_block,ny_block,max_blocks) ! surface temperature
+    real    (kind=dbl_kind) :: tauxa (nx_block,ny_block,max_blocks) ! atmo/ice stress
+    real    (kind=dbl_kind) :: tauya (nx_block,ny_block,max_blocks) ! atm/ice stress
+    real    (kind=dbl_kind) :: tauxo (nx_block,ny_block,max_blocks) ! ice/ocean stress
+    real    (kind=dbl_kind) :: tauyo (nx_block,ny_block,max_blocks) ! ice/ocean stress
+    real    (kind=dbl_kind) :: ailohi(nx_block,ny_block,max_blocks) ! fractional ice area
+    real    (kind=dbl_kind), allocatable :: tempfld(:,:,:)
     integer                 :: dbrc
-    !
-    integer (kind=int_kind), dimension (nx_block*ny_block)           :: indxi  ! compressed indices in i
-    integer (kind=int_kind), dimension (nx_block*ny_block)           :: indxj  ! compressed indices in i
-    real    (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: Tsrf   ! surface temperature
-    real    (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: tauxa  ! atmo/ice stress
-    real    (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: tauya  ! atm/ice stress
-    real    (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: tauxo  ! ice/ocean stress
-    real    (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: tauyo  ! ice/ocean stress
-    real    (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: ailohi ! fractional ice area
     character(len=*),parameter :: subname = 'ice_export'
     !-----------------------------------------------------
 
     rc = ESMF_SUCCESS
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
-
-    ! export states
-    call State_getFldPtr(exportState, 'Si_imask',  dataPtr_Si_imask ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_ifrac',  dataPtr_Si_ifrac ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (State_FldChk(exportState, 'Si_ifrac_n')) then 
-       call State_getFldPtr(exportState, 'Si_ifrac_n', dataPtr_Si_ifrac_n, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
-    call State_getFldPtr(exportState, 'Si_t',	  dataPtr_Si_t	   ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_avsdr', dataPtr_Si_avsdr ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_anidr', dataPtr_Si_anidr ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_avsdf', dataPtr_Si_avsdf ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_anidf', dataPtr_Si_anidf ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_u10',	  dataPtr_Si_u10   ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_tref',  dataPtr_Si_tref  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_qref',  dataPtr_Si_qref  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_snowh', dataPtr_Si_snowh ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_vsno',  dataPtr_Si_vsno  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Si_vice',  dataPtr_Si_vice  ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (State_FldChk(exportState, 'Si_logz0')) then 
-       call State_getFldPtr(exportState, 'Si_logz0', dataPtr_Si_logz0 ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
-    if (State_FldChk(exportState, 'Si_qref_HDO')) then 
-       call State_getFldPtr(exportState, 'Si_qref_HDO',	dataPtr_Si_qref_HDO ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Si_qref_16O',	dataPtr_Si_qref_16O ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Si_qref_18O',	dataPtr_Si_qref_18O ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
-
-    ! fluxes to atmosphere
-    call State_getFldPtr(exportState, 'Faii_taux',	dataPtr_Faii_taux      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Faii_tauy',	dataPtr_Faii_tauy      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Faii_lat',	dataPtr_Faii_lat       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Faii_sen',	dataPtr_Faii_sen       ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Faii_lwup',	dataPtr_Faii_lwup      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Faii_evap',	dataPtr_Faii_evap      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Faii_swnet',	dataPtr_Faii_swnet     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    ! fluxes to ocean
-    call State_getFldPtr(exportState, 'Fioi_melth',	dataPtr_Fioi_melth     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_swpen',	dataPtr_Fioi_swpen     ,rc=rc) 
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_swpen_vdr',	dataPtr_Fioi_swpen_vdr  ,rc=rc) 
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_swpen_vdf',	dataPtr_Fioi_swpen_vdf  ,rc=rc) 
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_swpen_idr',	dataPtr_Fioi_swpen_idr  ,rc=rc) 
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_swpen_idf',	dataPtr_Fioi_swpen_idf  ,rc=rc) 
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (State_FldChk(exportState, 'Fioi_swpen_ifrac_n')) then 
-       call State_getFldPtr(exportState, 'Fioi_swpen_ifrac_n', dataPtr_Fioi_swpen_ifrac_n ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
-    call State_getFldPtr(exportState, 'Fioi_meltw',	dataPtr_Fioi_meltw     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_salt',	dataPtr_Fioi_salt      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_taux',	dataPtr_Fioi_taux      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_tauy',	dataPtr_Fioi_tauy      ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_bcpho',	dataPtr_Fioi_bcpho     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_bcphi',	dataPtr_Fioi_bcphi     ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_getFldPtr(exportState, 'Fioi_flxdst',	dataPtr_Fioi_flxdst    ,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (State_FldChk(exportState, 'Fioi_meltw_HDO')) then 
-       call State_getFldPtr(exportState, 'Fioi_meltw_HDO',	dataPtr_Fioi_meltw_HDO ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Fioi_meltw_16O',	dataPtr_Fioi_meltw_16O ,rc=rc) 
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Fioi_meltw_18O',	dataPtr_Fioi_meltw_18O ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Faii_evap_HDO',	dataPtr_Faii_evap_HDO  ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Faii_evap_16O',	dataPtr_Faii_evap_16O  ,rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call State_getFldPtr(exportState, 'Faii_evap_18O',	dataPtr_Faii_evap_18O  ,rc=rc)  
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
 
     !calculate ice thickness from aice and vice. Also
     !create Tsrf from the first tracer (trcr) in ice_state.F
@@ -963,7 +677,6 @@ contains
 
        do j = jlo,jhi
           do i = ilo,ihi
-
              ! ice fraction
              ailohi(i,j,iblk) = min(aice(i,j,iblk), c1)
 
@@ -981,7 +694,6 @@ contains
              worky = -strocnyT(i,j,iblk)                            ! N/m^2
              tauxo(i,j,iblk) = workx*cos(ANGLET(i,j,iblk)) - worky*sin(ANGLET(i,j,iblk))
              tauyo(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) + workx*sin(ANGLET(i,j,iblk))
-
           enddo
        enddo
     enddo
@@ -1021,107 +733,25 @@ contains
        end do
     endif
 
+    !---------------------------------
+    ! Create the export state
+    !---------------------------------
+
     ! Zero out fields with tmask for proper coupler accumulation in ice free areas
     call shr_nuopc_methods_State_reset(exportState, value=c0, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    ! Create a temporary field
+    allocate(tempfld(nx_block,ny_block,nblocks))
 
-    ! Create the export state
-    n = 0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
+    ! Fractions and mask
+    call state_setexport(exportState, 'Si_ifrac', input=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-             dataPtr_Si_ifrac(n) = ailohi(i,j,iblk)
-
-             if (trim(grid_type) == 'latlon') then
-                dataPtr_Si_imask(n) = ocn_gridcell_frac(i,j,iblk)
-             else
-                dataPtr_Si_imask(n) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
-             end if
-
-             if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then
-
-                !-------states--------------------
-                dataPtr_Si_t(n)     = Tsrf(i,j,iblk)
-                dataPtr_Si_avsdr(n) = alvdr(i,j,iblk)
-                dataPtr_Si_anidr(n) = alidr(i,j,iblk)
-                dataPtr_Si_avsdf(n) = alvdf(i,j,iblk)
-                dataPtr_Si_anidf(n) = alidf(i,j,iblk)
-                dataPtr_Si_u10(n)   = Uref(i,j,iblk)
-                dataPtr_Si_tref(n)  = Tref(i,j,iblk)
-                dataPtr_Si_qref(n)  = Qref(i,j,iblk)
-                dataPtr_Si_snowh(n) = vsno(i,j,iblk) / ailohi(i,j,iblk)
-                dataPtr_Si_vsno(n)  = vsno(i,j,iblk)
-                dataPtr_Si_vice(n)  = vice(i,j,iblk)
-
-                if (State_FldChk(exportState, 'Si_logz0')) then
-                   if (Cdn_atm(i,j,iblk) > c0) then
-                      dataPtr_Si_logz0(n) = log(zref)-(vonkar/sqrt(Cdn_atm(i,j,iblk)))
-                   else
-                      ! this should not happen but if it does, continue gracefully
-                      write(nu_diag,*) trim(subname), ' WARNING: Cdn_atm error ',Cdn_atm(i,j,iblk),i,j,iblk
-                      dataPtr_Si_logz0(n) = log(iceruf)
-                   endif
-                endif
-
-                !--- ice/atm fluxes computed by ice
-                dataPtr_Faii_taux(n)  = tauxa(i,j,iblk)
-                dataPtr_Faii_tauy(n)  = tauya(i,j,iblk)
-                dataPtr_Faii_lat(n)   = flat(i,j,iblk)
-                dataPtr_Faii_sen(n)   = fsens(i,j,iblk)
-                dataPtr_Faii_lwup(n)  = flwout(i,j,iblk)
-                dataPtr_Faii_evap(n)  = evap(i,j,iblk)
-                dataPtr_Faii_swnet(n) = fswabs(i,j,iblk)
-
-                !--- ice/ocn fluxes computed by ice
-                dataPtr_Fioi_swpen(n)     = fswthru(i,j,iblk)    ! flux of shortwave through ice to ocean
-                dataPtr_Fioi_swpen_vdr(n) = fswthruvdr(i,j,iblk) ! flux of vis dir shortwave through ice to ocean
-                dataPtr_Fioi_swpen_vdf(n) = fswthruvdf(i,j,iblk) ! flux of vis dif shortwave through ice to ocean
-                dataPtr_Fioi_swpen_idr(n) = fswthruidr(i,j,iblk) ! flux of ir dir  shortwave through ice to ocean
-                dataPtr_Fioi_swpen_idf(n) = fswthruidf(i,j,iblk) ! flux of ir dif  shortwave through ice to ocean
-                dataPtr_Fioi_melth(n)     = fhocn(i,j,iblk)      ! heat exchange with ocean 
-                dataPtr_Fioi_meltw(n)     = fresh(i,j,iblk)      ! fresh water to ocean (h2o flux from melting)
-                dataPtr_Fioi_salt(n)      = fsalt(i,j,iblk)      ! salt to ocean (salt flux from melting)
-                dataPtr_Fioi_taux(n)      = tauxo(i,j,iblk)      ! stress n i/o zonal
-                dataPtr_Fioi_tauy(n)      = tauyo(i,j,iblk)      ! stress n i/o meridional
-
-                ! optional aerosol fluxes to ocean 
-                if (State_FldChk(exportState, 'Fioi_bcpho')) then
-                   dataPtr_Fioi_bcpho(n)  = faero_ocn(i,j,1,iblk)  ! hydrophobic bc
-                end if
-                if (State_FldChk(exportState, 'Fioi_bcphi')) then
-                   dataPtr_Fioi_bcphi(n)  = faero_ocn(i,j,2,iblk)  ! hydrophilic bc
-                end if
-                if (State_FldChk(exportState, 'Fioi_flxdst')) then
-                   dataPtr_Fioi_flxdst(n)  = faero_ocn(i,j,3,iblk)  ! dust
-                end if
-
-                ! optional water isotope fluxes to ocean 
-                if (State_FldChk(exportState, 'Fioi_meltw_HDO')) then
-                   dataPtr_Fioi_meltw_HDO(n) = fiso_ocn (i,j,1,iblk) !  Isotopes to ocean
-                   dataPtr_Fioi_meltw_16O(n) = fiso_ocn (i,j,2,iblk) !  Isotopes to ocean
-                   dataPtr_Fioi_meltw_18O(n) = fiso_ocn (i,j,3,iblk) !  Isotopes to ocean
-                   dataPtr_Faii_evap_HDO(n)  = fiso_evap(i,j,1,iblk) !  Isotope evap to atm
-                   dataPtr_Faii_evap_16O(n)  = fiso_evap(i,j,2,iblk) !  Isotope evap to atm
-                   dataPtr_Faii_evap_18O(n)  = fiso_evap(i,j,3,iblk) !  Isotope evap to atm
-                   dataPtr_Si_qref_HDO(n)    = Qref_iso(i,j,1,iblk)  !  Isotope qref to atm
-                   dataPtr_Si_qref_16O(n)    = Qref_iso(i,j,2,iblk)  !  Isotope qref to atm
-                   dataPtr_Si_qref_18O(n)    = Qref_iso(i,j,3,iblk)  !  Isotope qref to atm
-                endif
-             end if
-          enddo    !i
-       enddo    !j
-    enddo        !iblk
-
-    if (State_FldChk(exportState, 'Fioi_swpen_ifrac_n')) then
-       n = 0
+    if (trim(grid_type) == 'latlon') then
+       call state_setexport(exportState, 'Si_imask', input=ocn_gridcell_frac, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
        do iblk = 1, nblocks
           this_block = get_block(blocks_ice(iblk),iblk)
           ilo = this_block%ilo
@@ -1130,29 +760,231 @@ contains
           jhi = this_block%jhi
           do j = jlo, jhi
              do i = ilo, ihi
-                n = n+1
+                tempfld(i,j,iblk) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
+             end do
+          end do
+       end do
+       call state_setexport(exportState, 'Si_imask', input=tempfld, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
-                ! ice fraction
-                do n2 = 1, ncat
-                   dataPtr_Si_ifrac_n(n,n2) = aicen_init(i,j,n2,iblk)
-                enddo
+    ! ----
+    ! States from ice
+    ! ----
 
-                ! penetrative shortwave
-                if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then
-                   do n2 = 1, ncat
-                      dataPtr_Fioi_swpen_ifrac_n(n,n2) = fswthrun_ai(i,j,n2,iblk)
-                   enddo
-                else
-                   !--- zero out pass-through fields over land for benefit of x2oacc fields in cpl hist files
-                   do n2 = 1, ncat
-                      dataPtr_Fioi_swpen_ifrac_n(n,n2) = c0
-                   enddo
-                end if
+    ! surface temperature of ice covered portion (degK)
+    call state_setexport(exportState, 'Si_t', input=Tsrf , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-             enddo    !i
-          enddo       !j
-       enddo          !iblk
-    end if ! send_i2x_per_cat
+    ! albedo vis dir
+    call state_setexport(exportState, 'Si_avsdr', input=alvdr, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! albedo nir dir
+    call state_setexport(exportState, 'Si_anidr', input=alidr, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! albedo vis dif
+    call state_setexport(exportState, 'Si_avsdf', input=alvdf, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! albedo nir dif
+    call state_setexport(exportState, 'Si_anidf', input=alidf, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! 10m atm reference wind speed (m/s)
+    call state_setexport(exportState, 'Si_u10'  , input=Uref , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! 2m atm reference temperature (K)
+    call state_setexport(exportState, 'Si_tref' , input=Tref , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! 2m atm reference spec humidity (kg/kg)
+    call state_setexport(exportState, 'Si_qref' , input=Qref , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Snow volume
+    call state_setexport(exportState, 'Si_vsno' , input=vsno , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Ice volume
+    call state_setexport(exportState, 'Si_vice' , input=vice , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Snow height
+    do iblk = 1, nblocks
+       this_block = get_block(blocks_ice(iblk),iblk)
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+       do j = jlo, jhi
+          do i = ilo, ihi
+             if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then
+                tempfld(i,j,iblk) = vsno(i,j,iblk)/ailohi(i,j,iblk)
+             end if
+          end do
+       end do
+    end do
+    call state_setexport(exportState, 'Si_snowh' , input=tempfld , lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! ------ 
+    ! ice/atm fluxes computed by ice
+    ! ------ 
+
+    ! Zonal air/ice stress 
+    call state_setexport(exportState, 'Faii_taux' , input=tauxa, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Meridional air/ice stress 
+    call state_setexport(exportState, 'Faii_tauy' , input=tauya, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Latent heat flux (atm into ice)
+    call state_setexport(exportState, 'Faii_lat' , input=flat, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Sensible heat flux (atm into ice)
+    call state_setexport(exportState, 'Faii_sen' , input=fsens, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! longwave outgoing (upward), average over ice fraction only
+    call state_setexport(exportState, 'Faii_lwup' , input=flwout, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Evaporative water flux (kg/m^2/s)
+    call state_setexport(exportState, 'Faii_evap' , input=evap, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Shortwave flux absorbed in ice and ocean (W/m^2)
+    call state_setexport(exportState, 'Faii_swnet' , input=fswabs, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! ------ 
+    ! ice/ocn fluxes computed by ice
+    ! ------ 
+
+    ! flux of shortwave through ice to ocean
+    call state_setexport(exportState, 'Fioi_swpen' , input=fswthru, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! flux of vis dir shortwave through ice to ocean
+    call state_setexport(exportState, 'Fioi_swpen_vdr' , input=fswthruvdr, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! flux of vis dif shortwave through ice to ocean
+    call state_setexport(exportState, 'Fioi_swpen_vdf' , input=fswthruvdf, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! flux of ir dir shortwave through ice to ocean
+    call state_setexport(exportState, 'Fioi_swpen_idr' , input=fswthruidr, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! flux of ir dif shortwave through ice to ocean
+    call state_setexport(exportState, 'Fioi_swpen_idf' , input=fswthruidf, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! heat exchange with ocean 
+    call state_setexport(exportState, 'Fioi_melth' , input=fhocn, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! fresh water to ocean (h2o flux from melting)
+    call state_setexport(exportState, 'Fioi_meltw' , input=fresh, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! salt to ocean (salt flux from melting)
+    call state_setexport(exportState, 'Fioi_salt' , input=fsalt, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! stress n i/o zonal
+    call state_setexport(exportState, 'Fioi_taux' , input=tauxo, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! stress n i/o meridional
+    call state_setexport(exportState, 'Fioi_tauy' , input=tauyo, lmask=tmask, ifrac=ailohi, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    
+    ! ------ 
+    ! optional aerosol fluxes to ocean 
+    ! ------ 
+
+    ! hydrophobic bc
+    if (State_FldChk(exportState, 'Fioi_bcpho')) then
+       call state_setexport(exportState, 'Fioi_bcpho' , input=faero_ocn, index=1, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    ! hydrophilic bc
+    if (State_FldChk(exportState, 'Fioi_bcphi')) then
+       call state_setexport(exportState, 'Fioi_bcphi' , input=faero_ocn, index=2, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    ! dust
+    if (State_FldChk(exportState, 'Fioi_flxdst')) then
+       call state_setexport(exportState, 'Fioi_flxdst' , input=faero_ocn, index=3, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    
+    ! ------ 
+    ! optional water isotope fluxes to ocean 
+    ! ------ 
+
+    if (State_FldChk(exportState, 'Fioi_meltw_HDO')) then
+       call state_setexport(exportState, 'Fioi_meltw_HDO' , input=fiso_ocn, index=1, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Fioi_meltw_16O' , input=fiso_ocn, index=2, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Fioi_meltw_18O' , input=fiso_ocn, index=3, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    ! ------ 
+    ! optional water isotope fluxes to ocean 
+    ! ------ 
+
+    if (State_FldChk(exportState, 'Faii_evap_HDO')) then
+       !  Isotope evap to atm
+       call state_setexport(exportState, 'Faii_evap_HDO' , input=fiso_evap, index=1, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Faii_evap_16O' , input=fiso_evap, index=2, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Faii_evap_18O' , input=fiso_evap, index=3, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       !  Isotope evap to atm
+       call state_setexport(exportState, 'Si_qref_HDO' , input=Qref_iso, index=1, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Si_qref_16O' , input=Qref_iso, index=2, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Si_qref_18O' , input=Qref_iso, index=3, lmask=tmask, ifrac=ailohi, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    endif
+
+    ! ------ 
+    ! optional short wave penetration to ocean ice category
+    ! ------ 
+
+    ! ice fraction by category
+    if (State_FldChk(exportState, 'Si_ifrac_n')) then
+       do n2 = 1, ncat
+          call state_setexport(exportState, 'Si_ifrac_n' , input=aicen_init, index=n2, rc=rc)
+          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       end do
+    end if
+
+    ! penetrative shortwave by category
+    if (State_FldChk(exportState, 'Fioi_swpen_ifrac_n')) then
+       ! Note: no need zero out pass-through fields over land for benefit of x2oacc fields in cpl hist files since
+       ! the export state has been zeroed out at the beginning
+       do n2 = 1, ncat
+          call state_setexport(exportState, 'Fioi_swpen_ifrac_n' , input=aicen_init, index=n2, &
+               lmask=tmask, ifrac=ailohi, rc=rc)
+          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       end do
+    end if 
 
   end subroutine ice_export
 
@@ -1294,58 +1126,6 @@ contains
 
   !===============================================================================
 
-  subroutine State_GetFldPtr_1d(State, fldname, fldptr, rc)
-    ! ----------------------------------------------
-    ! Get pointer to a state field
-    ! ----------------------------------------------
-
-    ! input/output variables
-    type(ESMF_State)             , intent(in)     :: State
-    character(len=*)             , intent(in)     :: fldname
-    real(ESMF_KIND_R8) , pointer , intent(inout)  :: fldptr(:)
-    integer, optional            , intent(out)    :: rc
-
-    ! local variables
-    type(ESMF_Field) :: lfield
-    character(len=*),parameter :: subname='(ice_import_export:State_GetFldPtr_1d)'
-    ! ----------------------------------------------
-
-    rc = ESMF_SUCCESS
-
-    call ESMF_StateGet(State, itemName=trim(fldname), field=lfield, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-  end subroutine State_GetFldPtr_1d
-
-  subroutine State_GetFldPtr_2d(State, fldname, fldptr, rc)
-    ! ----------------------------------------------
-    ! Get pointer to a state field
-    ! ----------------------------------------------
-
-    ! input/output variables
-    type(ESMF_State)             , intent(in)     :: State
-    character(len=*)             , intent(in)     :: fldname
-    real(ESMF_KIND_R8) , pointer , intent(inout)  :: fldptr(:,:)
-    integer, optional            , intent(out)    :: rc
-
-    ! local variables
-    type(ESMF_Field) :: lfield
-    character(len=*),parameter :: subname='(ice_import_export:State_GetFldPtr_2d)'
-    ! ----------------------------------------------
-
-    rc = ESMF_SUCCESS
-
-    call ESMF_StateGet(State, itemName=trim(fldname), field=lfield, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-  end subroutine State_GetFldPtr_2d
-
-  !===============================================================================
-
   logical function State_FldChk(State, fldname)
     ! ----------------------------------------------
     ! Determine if field is in state
@@ -1364,5 +1144,419 @@ contains
     State_FldChk = (itemType /= ESMF_STATEITEM_NOTFOUND)
 
   end function State_FldChk
+
+  !===============================================================================
+
+  subroutine state_getimport_with_index(state, fldname, output, index, do_sum, rc)
+
+    ! ----------------------------------------------
+    ! Map import state field to output array
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)           , intent(in)    :: state
+    character(len=*)           , intent(in)    :: fldname
+    real (kind=dbl_kind)       , intent(inout) :: output(:,:,:,:)
+    integer                    , intent(in)    :: index
+    logical, optional          , intent(in)    :: do_sum 
+    integer                    , intent(out)   :: rc
+
+    ! local variables
+    type(block)                  :: this_block         ! block information for current block
+    integer                      :: i, j, iblk, n      ! incides
+    integer                      :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
+    integer                      :: i1, j1
+    real(kind=dbl_kind), pointer :: dataPtr1d(:)
+    real(kind=dbl_kind), pointer :: dataPtr3d(:,:,:)
+    character(len=*), parameter  :: subname='(ice_import_export:state_getimport)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    if (geomtype == ESMF_GEOMTYPE_MESH) then
+       
+       ! get field pointer
+       call state_getfldptr(state, trim(fldname), dataptr1d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       ! determine output array
+       n=0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                if (present(do_sum)) then
+                   output(i,j,index,iblk)  = output(i,j,index, iblk) + dataPtr1d(n)
+                else
+                   output(i,j,index,iblk)  = dataPtr1d(n)
+                end if
+             end do
+          end do
+       end do
+       
+    else if (geomtype == ESMF_GEOMTYPE_GRID) then
+       
+       call state_getfldptr(state, trim(fldname), dataptr3d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       do iblk = 1,nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo,jhi
+             do i = ilo,ihi
+                i1 = i - ilo + 1
+                j1 = j - jlo + 1
+                if (present(do_sum)) then
+                   output(i,j,index,iblk) = output(i,j,index,iblk) + dataPtr3d(i1,j1,iblk)
+                else
+                   output(i,j,index,iblk) = dataPtr3d(i1,j1,iblk)
+                end if
+             end do
+          end do
+       end do
+       
+    end if
+
+  end subroutine state_getimport_with_index
+
+  !===============================================================================
+
+  subroutine state_getimport_without_index(state, fldname, output, do_sum, rc)
+
+    ! ----------------------------------------------
+    ! Map import state field to output array
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)           , intent(in)    :: state
+    character(len=*)           , intent(in)    :: fldname
+    real (kind=dbl_kind)       , intent(inout) :: output(:,:,:)
+    logical, optional          , intent(in)    :: do_sum 
+    integer                    , intent(out)   :: rc
+
+    ! local variables
+    type(block)                  :: this_block         ! block information for current block
+    integer                      :: i, j, iblk, n      ! incides
+    integer                      :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
+    integer                      :: i1, j1
+    real(kind=dbl_kind), pointer :: dataPtr1d(:)
+    real(kind=dbl_kind), pointer :: dataPtr3d(:,:,:)
+    character(len=*), parameter :: subname='(ice_import_export:state_getimport)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    if (geomtype == ESMF_GEOMTYPE_MESH) then
+       
+       ! get field pointer
+       call state_getfldptr(state, trim(fldname), dataptr1d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       ! determine output array
+       n=0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                if (present(do_sum)) then
+                   output(i,j,iblk)  = output(i,j,iblk) + dataPtr1d(n)
+                else
+                   output(i,j,iblk)  = dataPtr1d(n)
+                end if
+             end do
+          end do
+       end do
+       
+    else if (geomtype == ESMF_GEOMTYPE_GRID) then
+       
+       call state_getfldptr(state, trim(fldname), dataptr3d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       do iblk = 1,nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo,jhi
+             do i = ilo,ihi
+                i1 = i - ilo + 1
+                j1 = j - jlo + 1
+                if (present(do_sum)) then
+                   output(i,j,iblk) = output(i,j,iblk) + dataPtr3d(i1,j1,iblk)
+                else
+                   output(i,j,iblk) = dataPtr3d(i1,j1,iblk)
+                end if
+             end do
+          end do
+       end do
+       
+    end if
+
+  end subroutine state_getimport_without_index
+
+  !===============================================================================
+
+  subroutine state_setexport_with_index(state, fldname, input, index, lmask, ifrac, rc)
+
+    ! ----------------------------------------------
+    ! Map input array to export state field
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)    ,           intent(inout) :: state
+    character(len=*)    ,           intent(in)    :: fldname
+    real(kind=dbl_kind) ,           intent(in)    :: input(:,:,:,:)
+    integer             ,           intent(in)    :: index
+    logical             , optional, intent(in)    :: lmask(:,:,:)              
+    real(kind=dbl_kind) , optional, intent(in)    :: ifrac(:,:,:)              
+    integer             ,           intent(out)   :: rc
+
+    ! local variables
+    type(block)                  :: this_block         ! block information for current block
+    integer                      :: i, j, iblk, n      ! incides
+    integer                      :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
+    integer                      :: i1,j1
+    real(kind=dbl_kind), pointer :: dataPtr1d(:)
+    real(kind=dbl_kind), pointer :: dataPtr3d(:,:,:)
+    character(len=*), parameter  :: subname='(ice_import_export:state_setexport)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    if (geomtype == ESMF_GEOMTYPE_MESH) then
+
+       call state_getfldptr(state, trim(fldname), dataPtr1d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       n = 0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                if (present(lmask) .and. present(ifrac)) then 
+                   if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
+                      dataPtr1d(n) = input(i,j,index,iblk)
+                   end if
+                else
+                   dataPtr1d(n) = input(i,j,index,iblk)
+                end if
+             end do
+          end do
+       end do
+
+    else if (geomtype == ESMF_GEOMTYPE_GRID) then
+
+       call state_getfldptr(state, trim(fldname), dataptr3d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       do iblk = 1,nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo,jhi
+             do i = ilo,ihi
+                i1 = i - ilo + 1
+                j1 = j - jlo + 1
+                if (present(lmask) .and. present(ifrac)) then 
+                   if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
+                      dataPtr3d(i1,j1,iblk) = input(i,j,index,iblk)
+                   end if
+                else
+                   dataPtr3d(i1,j1,iblk) = input(i,j,index,iblk)
+                end if
+             end do
+          end do
+       end do
+
+    end if
+  end subroutine state_setexport_with_index
+
+  !===============================================================================
+
+  subroutine state_setexport_without_index(state, fldname, input, lmask, ifrac, rc)
+
+    ! ----------------------------------------------
+    ! Map input array to export state field
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)               , intent(inout) :: state
+    character(len=*)               , intent(in)    :: fldname
+    real(kind=dbl_kind)            , intent(in)    :: input(:,:,:)
+    logical             , optional , intent(in)    :: lmask(:,:,:)              
+    real(kind=dbl_kind) , optional , intent(in)    :: ifrac(:,:,:)              
+    integer                        , intent(out)   :: rc
+
+    ! local variables
+    type(block)                  :: this_block         ! block information for current block
+    integer                      :: i, j, iblk, n      ! incides
+    integer                      :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
+    integer                      :: i1,j1
+    real(kind=dbl_kind), pointer :: dataPtr1d(:)
+    real(kind=dbl_kind), pointer :: dataPtr3d(:,:,:)
+    character(len=*), parameter  :: subname='(ice_import_export:state_setexport)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    if (geomtype == ESMF_GEOMTYPE_MESH) then
+
+       ! get field pointer
+       call state_getfldptr(state, trim(fldname), dataPtr1d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       n = 0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                if (present(lmask) .and. present(ifrac)) then 
+                   if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
+                      dataPtr1d(n) = input(i,j,iblk)
+                   end if
+                else
+                   dataPtr1d(n) = input(i,j,iblk)
+                end if
+             end do
+          end do
+       end do
+
+    else if (geomtype == ESMF_GEOMTYPE_GRID) then
+
+       call state_getfldptr(state, trim(fldname), dataptr3d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       do iblk = 1,nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo,jhi
+             do i = ilo,ihi
+                i1 = i - ilo + 1
+                j1 = j - jlo + 1
+                if (present(lmask) .and. present(ifrac)) then 
+                   if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
+                      dataPtr3d(i1,j1,iblk) = input(i,j,iblk)
+                   end if
+                else
+                   dataPtr3d(i1,j1,iblk) = input(i,j,iblk)
+                end if
+             end do
+          end do
+       end do
+
+    end if
+
+
+  end subroutine state_setexport_without_index
+
+  !===============================================================================
+
+  subroutine State_GetFldPtr_1d(State, fldname, fldptr, rc)
+    ! ----------------------------------------------
+    ! Get pointer to a state field
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)              , intent(in)     :: State
+    character(len=*)              , intent(in)     :: fldname
+    real(kind=dbl_kind) , pointer , intent(inout)  :: fldptr(:)
+    integer, optional             , intent(out)    :: rc
+
+    ! local variables
+    type(ESMF_Field) :: lfield
+    character(len=*),parameter :: subname='(ice_import_export:State_GetFldPtr_1d)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    call ESMF_StateGet(State, itemName=trim(fldname), field=lfield, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+  end subroutine State_GetFldPtr_1d
+
+  !===============================================================================
+
+  subroutine State_GetFldPtr_2d(State, fldname, fldptr, rc)
+    ! ----------------------------------------------
+    ! Get pointer to a state field
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)    ,            intent(in)     :: State
+    character(len=*)    ,            intent(in)     :: fldname
+    real(kind=dbl_kind) , pointer ,  intent(inout)  :: fldptr(:,:)
+    integer             , optional , intent(out)    :: rc
+
+    ! local variables
+    type(ESMF_Field) :: lfield
+    character(len=*),parameter :: subname='(ice_import_export:State_GetFldPtr_2d)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    call ESMF_StateGet(State, itemName=trim(fldname), field=lfield, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+  end subroutine State_GetFldPtr_2d
+
+  !===============================================================================
+
+  subroutine State_GetFldPtr_3d(State, fldname, fldptr, rc)
+    ! ----------------------------------------------
+    ! Get pointer to a state field
+    ! ----------------------------------------------
+
+    ! input/output variables
+    type(ESMF_State)    ,            intent(in)     :: State
+    character(len=*)    ,            intent(in)     :: fldname
+    real(kind=dbl_kind) , pointer ,  intent(inout)  :: fldptr(:,:,:)
+    integer             , optional , intent(out)    :: rc
+
+    ! local variables
+    type(ESMF_Field) :: lfield
+    character(len=*),parameter :: subname='(ice_import_export:State_GetFldPtr_3d)'
+    ! ----------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    call ESMF_StateGet(State, itemName=trim(fldname), field=lfield, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+  end subroutine State_GetFldPtr_3d
 
 end module ice_import_export
