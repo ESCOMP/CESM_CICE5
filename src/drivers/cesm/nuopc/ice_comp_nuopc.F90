@@ -81,8 +81,8 @@ module ice_comp_nuopc
   private :: ModelFinalize
 
   integer     , parameter :: dbug = 10
-  integer     , parameter :: debug_import = 1 ! internal debug level
-  integer     , parameter :: debug_export = 1 ! internal debug level
+  integer     , parameter :: debug_import = 0 ! internal debug level
+  integer     , parameter :: debug_export = 0 ! internal debug level
   character(*), parameter :: modName =  "(ice_comp_nuopc)"
   character(*), parameter :: u_FILE_u = &
        __FILE__
