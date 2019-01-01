@@ -35,6 +35,7 @@ module ice_comp_nuopc
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_SetScalar
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_GetScalar
   use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_Diagnose
+  use shr_nuopc_methods_mod , only : shr_nuopc_methods_state_fldDebug
   use shr_nuopc_time_mod    , only : shr_nuopc_time_AlarmInit
 
   use ice_import_export,      only : ice_import, ice_export
@@ -80,6 +81,8 @@ module ice_comp_nuopc
   private :: ModelFinalize
 
   integer     , parameter :: dbug = 10
+  integer     , parameter :: debug_import = 0 ! internal debug level
+  integer     , parameter :: debug_export = 0 ! internal debug level
   character(*), parameter :: modName =  "(ice_comp_nuopc)"
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -250,7 +253,7 @@ contains
     integer                 :: num_ice
     integer                 :: num_elim_gcells    ! local number of eliminated gridcells
     integer                 :: num_elim_blocks    ! local number of eliminated blocks
-    integer                 :: num_total_blocks 
+    integer                 :: num_total_blocks
     integer                 :: my_elim_start, my_elim_end
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
@@ -291,11 +294,6 @@ contains
     !----------------------------------------------------------------------------
 
     call t_startf ('cice_init_total')
-
-    !----------------------
-    ! Determine field indices of import/export arrays
-    !----------------------
-
 
     !----------------------------------------------------------------------------
     ! Initialize cice - needed in realize phase to get grid information
@@ -580,7 +578,7 @@ contains
                 if (num_elim_blocks >= my_elim_start .and. num_elim_blocks <= my_elim_end) then
                    this_block = get_block(globalID, globalID)
                    num_elim_gcells = num_elim_gcells + &
-                        (this_block%jhi-this_block%jlo+1) * (this_block%ihi-this_block%ilo+1) 
+                        (this_block%jhi-this_block%jlo+1) * (this_block%ihi-this_block%ilo+1)
                 end if
              end if
           end do
@@ -717,7 +715,7 @@ contains
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call ice_realize_fields(gcomp, Emesh, rc)
+    call ice_realize_fields(gcomp, mesh=Emesh, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------
@@ -744,6 +742,11 @@ contains
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! TODO (mvertens, 2018-12-21): fill in iceberg_prognostic as .false.
+
+    if (debug_export > 0 .and. my_task==master_task) then
+       call shr_nuopc_methods_State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
+            idate, sec, nu_diag, rc=rc)
+    end if
 
     !--------------------------------
     ! diagnostics
@@ -888,20 +891,6 @@ contains
     read(cvalue,*) mvelpp
 
     !--------------------------------
-    ! Unpack import state
-    !--------------------------------
-
-    call t_barrierf('cice_run_import_BARRIER',mpi_comm_ice)
-    call t_startf ('cice_run_import')
-    call ice_timer_start(timer_cplrecv)
-
-    call ice_import(importState, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ice_timer_stop(timer_cplrecv)
-    call t_stopf ('cice_run_import')
-
-    !--------------------------------
     ! check that cice internal time is in sync with master clock before timestep update
     !--------------------------------
 
@@ -955,7 +944,28 @@ contains
     endif
 
     !--------------------------------
-    ! Timestep update
+    ! Unpack import state
+    !--------------------------------
+
+    call t_barrierf('cice_run_import_BARRIER',mpi_comm_ice)
+    call t_startf ('cice_run_import')
+    call ice_timer_start(timer_cplrecv)
+
+    call ice_import(importState, rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ice_timer_stop(timer_cplrecv)
+    call t_stopf ('cice_run_import')
+
+    ! write Debug output
+    if (debug_import  > 0 .and. my_task==master_task) then
+       call shr_nuopc_methods_State_fldDebug(importState, flds_scalar_name, 'cice_import:', &
+            idate, sec, nu_diag, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    !--------------------------------
+    ! Advance cice and timestep update
     !--------------------------------
 
     if (force_restart_now) then
@@ -977,6 +987,12 @@ contains
 
     call ice_timer_stop(timer_cplsend)
     call t_stopf ('cice_run_export')
+
+    if (debug_export > 0 .and. my_task==master_task) then
+       call shr_nuopc_methods_State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
+            idate, sec, nu_diag, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     ! reset shr logging to my original values
     call shr_file_setLogUnit (shrlogunit)

@@ -286,6 +286,7 @@
           alvdf_ai, alidf_ai, alvdr_ai, alidr_ai, fhocn_ai, &
           fresh_ai, fsalt_ai, fsalt, &
           fswthru_ai, fhocn, fswthru, scale_factor, &
+          fswthruvdr, fswthruvdf, fswthruidr, fswthruidf, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, Uref, faero_ocn, &
           fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt, wind, &
@@ -433,22 +434,24 @@
       !  - also needed for global budget in diagnostics
       !-----------------------------------------------------------------
 
-         call scale_fluxes (nx_block,            ny_block,           &
-                            tmask    (:,:,iblk), nbtrcr,             &
-                            aice     (:,:,iblk), Tf      (:,:,iblk), &
-                            Tair     (:,:,iblk), Qa      (:,:,iblk), &
-                            strairxT (:,:,iblk), strairyT(:,:,iblk), &
-                            fsens    (:,:,iblk), flat    (:,:,iblk), &
-                            fswabs   (:,:,iblk), flwout  (:,:,iblk), &
-                            evap     (:,:,iblk),                     &
-                            Tref     (:,:,iblk), Qref    (:,:,iblk), &
-                            fresh    (:,:,iblk), fsalt   (:,:,iblk), &
-                            fhocn    (:,:,iblk), fswthru (:,:,iblk), &
-                            faero_ocn(:,:,:,iblk),                   &
-                            alvdr    (:,:,iblk), alidr   (:,:,iblk), &
-                            alvdf    (:,:,iblk), alidf   (:,:,iblk), &
-                            flux_bio(:,:,1:nbtrcr,iblk),             &
-                            Uref=Uref(:,:,iblk), wind=wind(:,:,iblk) )
+         call scale_fluxes (nx_block,              ny_block,             &
+                            tmask     (:,:,iblk)  , nbtrcr,              &
+                            aice      (:,:,iblk)  , Tf      (:,:,iblk),  &
+                            Tair      (:,:,iblk)  , Qa      (:,:,iblk),  &
+                            strairxT  (:,:,iblk)  , strairyT(:,:,iblk),  &
+                            fsens     (:,:,iblk)  , flat    (:,:,iblk),  &
+                            fswabs    (:,:,iblk)  , flwout  (:,:,iblk),  &
+                            evap      (:,:,iblk)  ,                      &
+                            Tref      (:,:,iblk)  , Qref    (:,:,iblk),  &
+                            fresh     (:,:,iblk)  , fsalt   (:,:,iblk),  &
+                            fhocn     (:,:,iblk)  , fswthru (:,:,iblk),  &
+                            fswthruvdr(:,:,iblk),  fswthruvdf(:,:,iblk), &
+                            fswthruidr(:,:,iblk) , fswthruidf(:,:,iblk), &
+                            faero_ocn (:,:,:,iblk),                      &
+                            alvdr     (:,:,iblk)  , alidr   (:,:,iblk),  &
+                            alvdf     (:,:,iblk)  , alidf   (:,:,iblk),  &
+                            flux_bio  (:,:,1:nbtrcr,iblk),               &
+                            Uref=Uref (:,:,iblk), wind=wind(:,:,iblk) )
 
 !echmod - comment this out for efficiency, if .not. calc_Tsfc
          if (.not. calc_Tsfc) then

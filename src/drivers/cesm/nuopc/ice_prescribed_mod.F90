@@ -99,8 +99,8 @@ contains
     !----- Local ------
     type(mct_gsMap)        :: gsmap_ice
     type(mct_gGrid)        :: dom_ice
-    integer(kind=int_kind) :: lsize 
-    integer(kind=int_kind) :: gsize 
+    integer(kind=int_kind) :: lsize
+    integer(kind=int_kind) :: gsize
     integer(kind=int_kind) :: nml_error ! namelist i/o error flag
     integer(kind=int_kind) :: n, nFile, ierr
     character(len=8)       :: fillalgo
@@ -516,7 +516,7 @@ contains
   subroutine ice_set_domain( lsize, mpicom, gsmap_i, dom_i )
 
     ! Arguments
-    integer        , intent(in)    :: lsize 
+    integer        , intent(in)    :: lsize
     integer        , intent(in)    :: mpicom
     type(mct_gsMap), intent(in)    :: gsMap_i
     type(mct_ggrid), intent(inout) :: dom_i
@@ -605,4 +605,3 @@ contains
   end subroutine ice_set_domain
 
 end module ice_prescribed_mod
-
