@@ -715,7 +715,7 @@ contains
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call ice_realize_fields(gcomp, Emesh, rc)
+    call ice_realize_fields(gcomp, mesh=Emesh, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------

@@ -258,12 +258,13 @@ contains
 
 !==============================================================================
 
-  subroutine ice_realize_fields(gcomp, Emesh, rc)
+  subroutine ice_realize_fields(gcomp, mesh, grid, rc)
 
     ! input/output variables
-    type(ESMF_GridComp)  :: gcomp
-    type(ESMF_Mesh)      :: Emesh
-    integer, intent(out) :: rc
+    type(ESMF_GridComp)                      :: gcomp
+    type(ESMF_Mesh) , optional , intent(in)  :: mesh
+    type(ESMF_Grid) , optional , intent(in)  :: grid
+    integer                    , intent(out) :: rc
 
     ! local variables
     type(ESMF_State)     :: importState
@@ -276,27 +277,55 @@ contains
     call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    geomtype = ESMF_GEOMTYPE_MESH
+    if (present(mesh)) then
 
-    call fldlist_realize( &
-         state=ExportState, &
-         fldList=fldsFrIce, &
-         numflds=fldsFrIce_num, &
-         flds_scalar_name=flds_scalar_name, &
-         flds_scalar_num=flds_scalar_num, &
-         tag=subname//':CICE_Export',&
-         mesh=Emesh, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       geomtype = ESMF_GEOMTYPE_MESH
 
-    call fldlist_realize( &
-         state=importState, &
-         fldList=fldsToIce, &
-         numflds=fldsToIce_num, &
-         flds_scalar_name=flds_scalar_name, &
-         flds_scalar_num=flds_scalar_num, &
-         tag=subname//':CICE_Import',&
-         mesh=Emesh, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call fldlist_realize( &
+            state=ExportState, &
+            fldList=fldsFrIce, &
+            numflds=fldsFrIce_num, &
+            flds_scalar_name=flds_scalar_name, &
+            flds_scalar_num=flds_scalar_num, &
+            tag=subname//':CICE_Export',&
+            mesh=mesh, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call fldlist_realize( &
+            state=importState, &
+            fldList=fldsToIce, &
+            numflds=fldsToIce_num, &
+            flds_scalar_name=flds_scalar_name, &
+            flds_scalar_num=flds_scalar_num, &
+            tag=subname//':CICE_Import',&
+            mesh=mesh, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    else if (present(grid)) then
+
+       geomtype = ESMF_GEOMTYPE_GRID
+
+       call fldlist_realize( &
+            state=ExportState, &
+            fldList=fldsFrIce, &
+            numflds=fldsFrIce_num, &
+            flds_scalar_name=flds_scalar_name, &
+            flds_scalar_num=flds_scalar_num, &
+            tag=subname//':CICE_Export',&
+            grid=grid, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call fldlist_realize( &
+            state=importState, &
+            fldList=fldsToIce, &
+            numflds=fldsToIce_num, &
+            flds_scalar_name=flds_scalar_name, &
+            flds_scalar_num=flds_scalar_num, &
+            tag=subname//':CICE_Import',&
+            grid=grid, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    end if
 
   end subroutine ice_realize_fields
 
@@ -1020,7 +1049,7 @@ contains
 
   !===============================================================================
 
-  subroutine fldlist_realize(state, fldList, numflds, flds_scalar_name, flds_scalar_num, mesh, tag, rc)
+  subroutine fldlist_realize(state, fldList, numflds, flds_scalar_name, flds_scalar_num, mesh, grid, tag, rc)
 
     use NUOPC, only : NUOPC_IsConnected, NUOPC_Realize
     use ESMF , only : ESMF_MeshLoc_Element, ESMF_FieldCreate, ESMF_TYPEKIND_R8
@@ -1036,7 +1065,8 @@ contains
     character(len=*)    , intent(in)    :: flds_scalar_name
     integer             , intent(in)    :: flds_scalar_num
     character(len=*)    , intent(in)    :: tag
-    type(ESMF_Mesh)     , intent(in)    :: mesh
+    type(ESMF_Mesh)     , intent(in), optional :: mesh
+    type(ESMF_Grid)     , intent(in), optional :: grid
     integer             , intent(inout) :: rc
 
     ! local variables
@@ -1059,19 +1089,33 @@ contains
              call SetScalarField(field, flds_scalar_name, flds_scalar_num, rc=rc)
              if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
           else
-             call ESMF_LogWrite(trim(subname)//trim(tag)//" Field = "//trim(stdname)//" is connected using mesh", &
-                  ESMF_LOGMSG_INFO, rc=dbrc)
-             ! Create the field
-             if (fldlist(n)%ungridded_lbound > 0 .and. fldlist(n)%ungridded_ubound > 0) then
-                field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, &
-                     ungriddedLbound=(/fldlist(n)%ungridded_lbound/), &
-                     ungriddedUbound=(/fldlist(n)%ungridded_ubound/), rc=rc)
+             if (present(mesh)) then
+                call ESMF_LogWrite(trim(subname)//trim(tag)//" Field = "//trim(stdname)//" is connected using mesh", &
+                     ESMF_LOGMSG_INFO, rc=dbrc)
+                ! Create the field
+                if (fldlist(n)%ungridded_lbound > 0 .and. fldlist(n)%ungridded_ubound > 0) then
+                   field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, &
+                        ungriddedLbound=(/fldlist(n)%ungridded_lbound/), &
+                        ungriddedUbound=(/fldlist(n)%ungridded_ubound/), rc=rc)
+                   if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+                else
+                   field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+                   if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+                end if
+             else if (present(grid)) then
+                call ESMF_LogWrite(trim(subname)//trim(tag)//" Field = "//trim(stdname)//" is connected using grid", &
+                     ESMF_LOGMSG_INFO, rc=dbrc)
+                ! Create the field without multiple categories
+                ! TODO (mvertens, 2018=12-27): Is the folloiwng correct?
+                field = ESMF_FieldCreate(grid, ESMF_TYPEKIND_R8, name=stdname, indexflag=ESMF_INDEX_DELOCAL, &
+                     ungriddedLBound=(/1/), ungriddedUBound=(/max_blocks/), rc=rc)
                 if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
              else
-                field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-                if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+                call ESMF_LogWrite(subname // 'input must be grid or mesh', ESMF_LOGMSG_INFO, rc=dbrc)
+                rc = ESMF_FAILURE
+                return
              end if
-          endif
+          end if ! if not scalar field
 
           ! NOW call NUOPC_Realize
           call NUOPC_Realize(state, field=field, rc=rc)
