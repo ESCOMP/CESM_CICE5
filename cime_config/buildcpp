@@ -46,6 +46,9 @@ def buildcpp(case):
     cice_auto_decomp = case.get_value("CICE_AUTO_DECOMP")
 
     pts_mode = case.get_value("PTS_MODE")
+    # set cice mode and cice_config_opts
+    cice_mode = case.get_value("CICE_MODE")
+
     if pts_mode:
         # explicitl set values for single column mode
         nx = 1
@@ -79,11 +82,10 @@ def buildcpp(case):
             case.set_value("CICE_BLCKX", config[2])
             case.set_value("CICE_BLCKY", config[3])
             case.set_value("CICE_MXBLCKS",config[4])
-            case.set_value("CICE_DECOMPTYPE", config[5])
+            if cice_mode != 'prescribed':
+                case.set_value("CICE_DECOMPTYPE", config[5])
             case.set_value("CICE_DECOMPSETTING", config[6])
 
-    # set cice mode and cice_config_opts
-    cice_mode = case.get_value("CICE_MODE")
 
     # set cice physics
     if "cice5" in cice_config_opts:
@@ -200,7 +202,7 @@ def set_nondefault_cpp(cice_config_opts, string, value):
 def _main_func():
 
     caseroot = parse_input(sys.argv)
-    with Case(caseroot) as case:
+    with Case(caseroot, read_only=False) as case:
         cice_cppdefs = buildcpp(case)
     logger.info("CICE_CPPDEFS: %s" %cice_cppdefs)
 
