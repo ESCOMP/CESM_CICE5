@@ -1,4 +1,13 @@
 ===============================================================
+cice5_20190107
+Originator: jedwards
+Date:  07 Jan 2019
+Version: 5.0
+One-line: Fix setting of DECOMPTYPE
+
+        modified: buildcpp
+
+===============================================================
 cice5_20181109
 Originator: dbailey
 Date:  09 Nov 2018
