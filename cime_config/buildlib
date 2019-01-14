@@ -20,10 +20,7 @@ def _build_cice():
 
     caseroot, libroot, bldroot = parse_input(sys.argv)
 
-    with Case(caseroot) as case:
-        casetools = case.get_value("CASETOOLS")
-        gmake_j   = case.get_value("GMAKE_J")
-        gmake     = case.get_value("GMAKE")
+    with Case(caseroot, read_only=False) as case:
         srcroot   = case.get_value("SRCROOT")
         driver    = case.get_value("COMP_INTERFACE")
 
@@ -36,6 +33,11 @@ def _build_cice():
         except:
             raise
 
+    with Case(caseroot) as case:
+        casetools = case.get_value("CASETOOLS")
+        gmake_j   = case.get_value("GMAKE_J")
+        gmake     = case.get_value("GMAKE")
+        srcroot   = case.get_value("SRCROOT")
         # create Filepath file
         objroot = case.get_value("OBJROOT")
         filepath_file = os.path.join(objroot,"ice","obj","Filepath")
