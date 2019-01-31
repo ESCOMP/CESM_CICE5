@@ -98,42 +98,42 @@
  
 ! Solar declination for next time step
  
-#ifdef CESMCOUPLED
+#if defined NEMSCOUPLED
+      ydayp1 = yday + sec/secday
+#elif defined CESMCOUPLED
       if (calendar_type == "GREGORIAN") then
          ydayp1 = min(nextsw_cday, real(days_per_year,kind=dbl_kind))
       else
          ydayp1 = nextsw_cday
       endif
-
-      !--- update coszen when nextsw_cday valid
-      if (ydayp1 > -0.5_dbl_kind) then
 #else
       ydayp1 = yday + sec/secday
 #endif
  
-      call shr_orb_decl(ydayp1, eccen, mvelpp, lambm0, &
-                        obliqr, delta, eccf)
+      !--- update coszen 
+      if (ydayp1 > -0.5_dbl_kind) then
 
-      coszen(:,:) = c0  ! sun at horizon
+         call shr_orb_decl(ydayp1, eccen, mvelpp, lambm0, &
+              obliqr, delta, eccf)
 
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-!lipscomb - function inlined to improve vector efficiency
-!         coszen(i,j) = shr_orb_cosz(ydayp1, &
-!                                    tlat(i,j),tlon(i,j),delta)
+         coszen(:,:) = c0  ! sun at horizon
 
-         coszen(i,j) = sin(tlat(i,j))*sin(delta) &
-                     + cos(tlat(i,j))*cos(delta) &
-                      *cos((sec/secday-p5)*c2*pi + tlon(i,j)) !cos(hour angle)
-      enddo
+         !DIR$ CONCURRENT !Cray
+         !cdir nodep      !NEC
+         !ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+            !lipscomb - function inlined to improve vector efficiency
+            ! coszen(i,j) = shr_orb_cosz(ydayp1, tlat(i,j),tlon(i,j),delta)
+
+            coszen(i,j) = sin(tlat(i,j))*sin(delta) &
+                 + cos(tlat(i,j))*cos(delta) &
+                 * cos((sec/secday-p5)*c2*pi + tlon(i,j)) !cos(hour angle)
+         enddo
  
-#ifdef CESMCOUPLED
       endif
-#endif
 
       end subroutine compute_coszen
  

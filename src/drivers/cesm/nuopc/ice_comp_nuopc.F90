@@ -695,12 +695,12 @@ contains
        diff_lon = abs(lonMesh(n) - lon(n))
        if ( (diff_lon > 1.e2  .and. abs(diff_lon - 360_r8) > 1.e-1) .or.&
             (diff_lon > 1.e-3 .and. diff_lon < 1._r8) ) then
-          write(6,100)n,lonMesh(n),lon(n), diff_lon
+          !write(6,100)n,lonMesh(n),lon(n), diff_lon
 100       format('ERROR: CICE  n, lonmesh(n), lon(n), diff_lon = ',i6,2(f21.13,3x),d21.5)
           !call shr_sys_abort()
        end if
        if (abs(latMesh(n) - lat(n)) > 1.e-1) then
-          write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
+          !write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
 101       format('ERROR: CICE n, latmesh(n), lat(n), diff_lat = ',i6,2(f21.13,3x),d21.5)
           !call shr_sys_abort()
        end if
