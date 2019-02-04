@@ -25,7 +25,7 @@ def _build_cice():
 
         # call buildcpp  to set the cppdefs
         cmd = os.path.join(os.path.join(srcroot,"components","cice","cime_config","buildcpp"))
-        logger.info("     ...calling cice buildcpp to set build time options")
+        logger.info("     ... buildlib calling cice buildcpp to set build time options")
         try:
             mod = imp.load_source("buildcpp", cmd)
             cice_cppdefs = mod.buildcpp(case)
@@ -44,7 +44,7 @@ def _build_cice():
         if not os.path.isfile(filepath_file):
             srcroot = case.get_value("SRCROOT")
             caseroot = case.get_value("CASEROOT")
-            paths = [os.path.join(caseroot,"SourceMods","src.cice"), 
+            paths = [os.path.join(caseroot,"SourceMods","src.cice"),
                      os.path.join(srcroot,"components","cice","src","drivers","cesm"),
                      os.path.join(srcroot,"components","cice","src","io_pio"),
                      os.path.join(srcroot,"components","cice","src","mpi"),
