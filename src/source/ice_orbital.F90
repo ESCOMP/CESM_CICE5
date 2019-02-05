@@ -98,7 +98,7 @@
  
 ! Solar declination for next time step
  
-#if defined NEMSCOUPLED
+#if defined NEMS_COUPLED
       ydayp1 = yday + sec/secday
 #elif defined CESMCOUPLED
       if (calendar_type == "GREGORIAN") then
