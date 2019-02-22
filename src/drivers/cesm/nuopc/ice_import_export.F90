@@ -678,8 +678,10 @@ contains
     real    (kind=dbl_kind) :: tauxo (nx_block,ny_block,max_blocks) ! ice/ocean stress
     real    (kind=dbl_kind) :: tauyo (nx_block,ny_block,max_blocks) ! ice/ocean stress
     real    (kind=dbl_kind) :: ailohi(nx_block,ny_block,max_blocks) ! fractional ice area
-    real    (kind=dbl_kind), allocatable :: tempfld(:,:,:)
     integer                 :: dbrc
+    real    (kind=dbl_kind), allocatable :: tempfld(:,:,:)
+    real    (kind=dbl_kind), pointer :: dataptr2d(:,:) 
+    real    (kind=dbl_kind), pointer :: dataptr4d(:,:,:,:) 
     character(len=*),parameter :: subname = 'ice_export'
     !-----------------------------------------------------
 
@@ -998,21 +1000,104 @@ contains
 
     ! ice fraction by category
     if (State_FldChk(exportState, 'Si_ifrac_n')) then
-       do n2 = 1, ncat
-          call state_setexport(exportState, 'Si_ifrac_n' , input=aicen_init, index=n2, rc=rc)
+       if (geomtype == ESMF_GEOMTYPE_MESH) then
+          call state_getfldptr(state, 'Si_ifrac_n', dataPtr2d, rc)
           if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+          n = 0
+          do iblk = 1, nblocks
+             this_block = get_block(blocks_ice(iblk),iblk)
+             ilo = this_block%ilo
+             ihi = this_block%ihi
+             jlo = this_block%jlo
+             jhi = this_block%jhi
+             do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                do n2 = 1, ncat
+                   dataptr2d(n,n2) = aicen_init(i,j,n2,iblk)
+                end do
+             end do
+             end do
+          end do
+
+    else if (geomtype == ESMF_GEOMTYPE_GRID) then
+       call state_getfldptr(state, trim(fldname), dataptr4d, rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       do iblk = 1,nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo
+          ihi = this_block%ihi
+          jlo = this_block%jlo
+          jhi = this_block%jhi
+          do j = jlo,jhi
+          do i = ilo,ihi
+             i1 = i - ilo + 1
+             j1 = j - jlo + 1
+             do n2 = 1,ncat
+                dataPtr4d(i1,j1,iblk,n2) = aicen_init(i,j,n2,iflk)
+             end do
+          end do
+          end do
        end do
     end if
 
     ! penetrative shortwave by category
+    ! Note: no need zero out pass-through fields over land for benefit of x2oacc fields in cpl hist files since
+    ! the export state has been zeroed out at the beginning
+
     if (State_FldChk(exportState, 'Fioi_swpen_ifrac_n')) then
-       ! Note: no need zero out pass-through fields over land for benefit of x2oacc fields in cpl hist files since
-       ! the export state has been zeroed out at the beginning
-       do n2 = 1, ncat
-          call state_setexport(exportState, 'Fioi_swpen_ifrac_n' , input=aicen_init, index=n2, &
-               lmask=tmask, ifrac=ailohi, rc=rc)
+       if (geomtype == ESMF_GEOMTYPE_MESH) then
+          call state_getfldptr(state, 'Fioi_swpen_ifrac_n', dataPtr2d, rc)
           if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       end do
+
+          n = 0
+          do iblk = 1, nblocks
+             this_block = get_block(blocks_ice(iblk),iblk)
+             ilo = this_block%ilo
+             ihi = this_block%ihi
+             jlo = this_block%jlo
+             jhi = this_block%jhi
+             do j = jlo, jhi
+                do i = ilo, ihi
+                   n = n+1
+                   do n2 = 1, ncat
+                      if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then
+                         dataptr2d(n,n2) = aicen_init(i,j,n2,iblk)
+                      else
+                         dataptr2d(n,n2) = 0._r8
+                      end if
+                   end do
+                end do
+             end do
+          end do
+
+       else if (geomtype == ESMF_GEOMTYPE_GRID) then
+          call state_getfldptr(state, trim(fldname), dataptr4d, rc)
+          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+
+          do iblk = 1,nblocks
+             this_block = get_block(blocks_ice(iblk),iblk)
+             ilo = this_block%ilo
+             ihi = this_block%ihi
+             jlo = this_block%jlo
+             jhi = this_block%jhi
+             do j = jlo,jhi
+                do i = ilo,ihi
+                   i1 = i - ilo + 1
+                   j1 = j - jlo + 1
+                   do n2 = 1, ncat
+                      if ( tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then
+                         dataPtr4d(i1,j1,iblk,n2) =  fswthrun_ai(i,j,n2,iblk)
+                      else
+                         dataptr4d(i1,j1,iblk,n2) = 0._r8
+                      end if
+                   end if
+                end do
+             end do
+          end do
+       end if
     end if
 
   end subroutine ice_export
