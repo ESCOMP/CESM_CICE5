@@ -76,6 +76,7 @@
       <value hgrid='tx0.1v3'>$DIN_LOC_ROOT/ice/cice/g.e11.G.T62_t12.002.cice.r.0016-01-01-00000.nc</value>
       <value hgrid='ar9v3'>$DIN_LOC_ROOT/ice/cice/cice5ic/r26RBRCICE5g0.cice.r.1990-09-01-00000.nc</value>
       <value hgrid='ar9v4'>$DIN_LOC_ROOT/ice/cice/cice5ic/r26RBRCICE5g0.cice.r.1990-09-01-00000.nc</value>
+      <value hgrid='tx0.25v1'>$DIN_LOC_ROOT/ice/cice/cice5_model_0.25.res_2016100300.nc</value>
     </values>
   </entry>
 
@@ -362,6 +363,19 @@
     </values>
   </entry>
 
+  <entry id="use_restart_time">
+    <type>logical</type>
+    <category>setup</category>
+    <group>setup_nml</group>
+    <desc>
+      if true, use time written in core restart file
+    </desc>
+    <values>
+      <value>.true. </value>
+      <value hgrid="tx0.25v1">.false.</value>
+    </values>
+  </entry>
+
   <!-- =========================== -->
   <!-- Grid info -->
   <!-- =========================== -->
@@ -377,6 +391,7 @@
     <values>
       <value>bin</value>
       <value cice_mode="prescribed">nc</value>
+      <value hgrid='tx0.25v1'>nc</value>
     </values>
   </entry>
 
@@ -420,6 +435,7 @@
       <value hgrid="ar9v3">$DIN_LOC_ROOT/ice/cice/ar9v3_20101118.grid</value>
       <value hgrid="ar9v4">$DIN_LOC_ROOT/ice/cice/ar9v3_20101118.grid</value>
       <value hgrid="us20">$DIN_LOC_ROOT/ice/cice/domain.ocn.us20.20110426.nc</value>
+      <value hgrid="tx0.25v1">$DIN_LOC_ROOT/ocn/mom/tx0.25v1/grid_cice_NEMS_mx025.nc</value>
     </values>
   </entry>
 
@@ -444,6 +460,7 @@
       <value hgrid="ar9v3">$DIN_LOC_ROOT/ocn/pop/ar9v3/grid/kmt.ar9v3.ocn.ChanBarrier.20100622.ieeei4</value>
       <value hgrid="ar9v4">$DIN_LOC_ROOT/ice/cice/ar9v3_20110106.kmt</value>
       <value hgrid="us20">$DIN_LOC_ROOT/ice/cice/domain.ocn.us20.20110426.nc</value>
+      <value hgrid="tx0.25v1">$DIN_LOC_ROOT/ocn/mom/tx0.25v1/kmtu_cice_NEMS_mx025.nc</value>
     </values>
   </entry>
 
@@ -544,6 +561,7 @@
       <value hgrid ='tx0.1v2'>tripole</value>
       <value hgrid ='tx0.1v3'>tripole</value>
       <value hgrid ='tx1v1'>tripole</value>
+      <value hgrid ='tx0.25v1'>tripole</value>
     </values>
   </entry>
 

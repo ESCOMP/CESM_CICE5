@@ -80,17 +80,17 @@
          call ice_pio_initdecomp(ndim3=ncat  , iodesc=iodesc3d_ncat,remap=.true.)
 
          if (use_restart_time) then
-         status = pio_get_att(File, pio_global, 'istep1', istep0)
-         status = pio_get_att(File, pio_global, 'time', time)
-         status = pio_get_att(File, pio_global, 'time_forc', time_forc)
-         call pio_seterrorhandling(File, PIO_BCAST_ERROR)
-         status = pio_get_att(File, pio_global, 'nyr', nyr)
-         call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
-         if (status == PIO_noerr) then
-            status = pio_get_att(File, pio_global, 'month', month)
-            status = pio_get_att(File, pio_global, 'mday', mday)
-            status = pio_get_att(File, pio_global, 'sec', sec)
-         endif
+            status = pio_get_att(File, pio_global, 'istep1', istep0)
+            status = pio_get_att(File, pio_global, 'time', time)
+            status = pio_get_att(File, pio_global, 'time_forc', time_forc)
+            call pio_seterrorhandling(File, PIO_BCAST_ERROR)
+            status = pio_get_att(File, pio_global, 'nyr', nyr)
+            call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
+            if (status == PIO_noerr) then
+               status = pio_get_att(File, pio_global, 'month', month)
+               status = pio_get_att(File, pio_global, 'mday', mday)
+               status = pio_get_att(File, pio_global, 'sec', sec)
+            endif
          endif ! use namelist values if use_restart_time = F
       endif
 
@@ -441,7 +441,7 @@
          status = pio_inq_varid(File,trim(vname),vardesc)
 
          if (status /= 0) then
-            call abort_ice("CICE4 restart? Missing variable: "//trim(vname))
+            call abort_ice("CICE restart error: Missing variable: "//trim(vname))
          endif
 
          call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)

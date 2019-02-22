@@ -98,13 +98,17 @@ def buildcpp(case):
 
     if cice_mode == 'prescribed':
         ntr_aero = 0
+    elif "tx0.25" in hgrid:
+        ntr_aero = 0
     else:
         ntr_aero = 3
     ntr_aero = set_nondefault_cpp(cice_config_opts, "ntr_aero", ntr_aero)
 
-    # set number of bgc tracers (valid values are 0->10)
+    # set number of number of bio grid layers (valid values are 0->10)
     if cice_mode == 'prescribed':
         nbgclyr = 0
+    elif "tx0.25" in hgrid:
+        nbgclyr = 7
     else:
         nbgclyr = 3
     nbgclyr = set_nondefault_cpp(cice_config_opts, "nbgclyr", nbgclyr)
@@ -142,11 +146,15 @@ def buildcpp(case):
         nicelyr = 4
     elif "ar9v" in hgrid:
         nicelyr = 7
+    elif "tx0.25" in hgrid:
+        nicelyr = 7
     else:
         nicelyr = 8
 
     # set number of snow layers
     if phys == "cice4":
+        nsnwlyr = 1
+    elif "tx0.25" in hgrid:
         nsnwlyr = 1
     else:
         nsnwlyr = 3
