@@ -1161,7 +1161,7 @@ contains
       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
       field = ESMF_FieldCreate(name=trim(flds_scalar_name), grid=grid, typekind=ESMF_TYPEKIND_R8, &
-           ungriddedLBound=(/1/), ungriddedUBound=(/flds_scalar_num/), rc=rc)
+           ungriddedLBound=(/1/), ungriddedUBound=(/flds_scalar_num/), gridToFieldMap=(/2/), rc=rc)
       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
     end subroutine SetScalarField
