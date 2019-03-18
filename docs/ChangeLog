@@ -1,4 +1,13 @@
 ===============================================================
+cice5_20190204
+Originator: jedwards
+Date:  04 Feb 2019
+Version: 5.0
+One-line: Fix bug in setting DECOMPTYPE for pts_mode
+
+        modified: buildcpp, buildnml, buildlib
+
+===============================================================
 cice5_20190107
 Originator: jedwards
 Date:  07 Jan 2019
@@ -68,7 +77,7 @@ Date:  13 Sep 2018
 Version: 5.0
 One-line: Fix hobart NAG and CMIP variable changes.
 
-I changed the nodes for the hobart tests to 4 so the 
+I changed the nodes for the hobart tests to 4 so the
 NAG compiler tests would pass.
 I also made some updates for CMIP variables. (BFB)
 
@@ -187,7 +196,7 @@ cice5_20180213
 Originator: dbailey
 Date: 13 Feb 2018
 Version: 5.0
-One-line: 
+One-line:
 
         modified:   cime_config/testdefs/testlist_cice.xml
 
