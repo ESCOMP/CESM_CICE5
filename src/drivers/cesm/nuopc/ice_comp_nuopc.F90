@@ -81,8 +81,8 @@ module ice_comp_nuopc
   private :: ModelFinalize
 
   integer     , parameter :: dbug = 10
-  integer     , parameter :: debug_import = 0 ! internal debug level
-  integer     , parameter :: debug_export = 0 ! internal debug level
+  integer     , parameter :: debug_import = 1 ! internal debug level
+  integer     , parameter :: debug_export = 1 ! internal debug level
   character(*), parameter :: modName =  "(ice_comp_nuopc)"
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -280,16 +280,6 @@ contains
     inst_name = "ICE"//trim(inst_suffix)
 
     !----------------------------------------------------------------------------
-    ! reset shr logging to my log file
-    !----------------------------------------------------------------------------
-
-    ! Note that sets the nu_diag module variable in ice_fileunits
-    ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
-    ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
-
-    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, shrloglev)
-
-    !----------------------------------------------------------------------------
     ! start cice timers
     !----------------------------------------------------------------------------
 
@@ -422,6 +412,12 @@ contains
        call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
     end if
 
+    ! Note that sets the nu_diag module variable in ice_fileunits
+    ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
+    ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
+
+    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, shrloglev)
+
     ! *** Initialize cice ***
     ! Assume that always get atmospheric aerosols to cice (atm_aero no longer needed as flag)-
     ! Note that cice_init also sets time manager info as well as mpi communicator info,
@@ -430,6 +426,10 @@ contains
     call t_startf ('cice_init')
     call cice_init( lmpicom )
     call t_stopf ('cice_init')
+
+    !----------------------------------------------------------------------------
+    ! reset shr logging to my log file
+    !----------------------------------------------------------------------------
 
     ! Now write output to nu_diag - this must happen AFTER call to cice_init
     if (localPet == 0) then
@@ -843,8 +843,6 @@ contains
     !--------------------------------
 
     call shr_file_getLogUnit (shrlogunit)
-    call shr_file_getLogLevel(shrloglev)
-    call shr_file_setLogLevel(max(shrloglev,1))
     call shr_file_setLogUnit (nu_diag)
 
     !--------------------------------
@@ -996,7 +994,6 @@ contains
 
     ! reset shr logging to my original values
     call shr_file_setLogUnit (shrlogunit)
-    call shr_file_setLogLevel(shrloglev)
 
     !--------------------------------
     ! stop timers and print timer info
