@@ -235,43 +235,7 @@
          f_siitdthick = 'mxxxx'
          f_siitdsnthick = 'mxxxx'
 
-         ! Turn off CICE duplicates
-         f_iage = 'xxxxx'
-         f_snoice = 'xxxxx'
-         f_strength = 'xxxxx'
-         f_divu = 'xxxxx'
-         f_flat = 'xxxxx'
-         f_flat_ai = 'xxxxx'
-         f_flwdn = 'xxxxx'
-         f_flwup = 'xxxxx'
-         f_fsens = 'xxxxx'
-         f_fsens_ai = 'xxxxx'
-         f_fhocn = 'xxxxx'
-         f_fhocn_ai = 'xxxxx'
-         f_fswup = 'xxxxx'
-         f_strintx = 'xxxxx'
-         f_strinty = 'xxxxx'
-         f_strcorx = 'xxxxx'
-         f_strcory = 'xxxxx'
-         f_strtltx = 'xxxxx'
-         f_strtlty = 'xxxxx'
-         f_strairx = 'xxxxx'
-         f_strairy = 'xxxxx'
-         f_strocnx = 'xxxxx'
-         f_strocny = 'xxxxx'
-         f_rain = 'xxxxx'
-         f_snow = 'xxxxx'
-         f_shear = 'xxxxx'
-         f_Tsfc = 'xxxxx'
-         f_uvel = 'xxxxx'
-         f_vvel = 'xxxxx'
-         f_sig1 = 'xxxxx'
-         f_sig2 = 'xxxxx'
-         f_vicen = 'xxxxx'
-         f_vsnon = 'xxxxx'
-         f_fswsfcn = 'xxxxx'
-         f_fswintn = 'xxxxx'
-         f_fswthrun = 'xxxxx'
+      ! Don't turn off CICE duplicates in code.
 
       endif
 
@@ -2374,7 +2338,7 @@
            do j = jlo, jhi
            do i = ilo, ihi
               if (aice(i,j,iblk) > puny) then
-                 worka(i,j) = evapi(i,j,iblk)*rhoi
+                 worka(i,j) = evapi(i,j,iblk)/dt
               endif
            enddo
            enddo
@@ -2422,7 +2386,7 @@
            do j = jlo, jhi
            do i = ilo, ihi
               if (aice(i,j,iblk) > puny) then
-                 worka(i,j) = evaps(i,j,iblk)*rhos
+                 worka(i,j) = evaps(i,j,iblk)/dt
               endif
            enddo
            enddo
@@ -2434,7 +2398,7 @@
            do j = jlo, jhi
            do i = ilo, ihi
               if (aice(i,j,iblk) > puny) then
-                 worka(i,j) = aice(i,j,iblk)*fsnow(i,j,iblk)*rhos
+                 worka(i,j) = aice(i,j,iblk)*fsnow(i,j,iblk)
               endif
            enddo
            enddo
