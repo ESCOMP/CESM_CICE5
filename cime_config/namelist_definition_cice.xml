@@ -538,6 +538,7 @@
     </values>
   </entry>
 
+  <!--
   <entry id="dt">
     <type>real</type>
     <category>setup</category>
@@ -550,6 +551,7 @@
       <value hgrid='tx0.25v1'>900.0</value>
     </values>
   </entry>
+  -->
 
 <!--  <entry id="npt">
     <type>integer</type>
