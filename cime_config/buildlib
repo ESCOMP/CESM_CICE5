@@ -50,9 +50,9 @@ def _build_cice():
                      os.path.join(srcroot,"components","cice","src","mpi"),
                      os.path.join(srcroot,"components","cice","src","source")]
             if driver == 'nuopc':
-                paths.append(os.path.join(srcroot,"components","cice","src","drivers","cesm","nuopc"))
+                paths.append(os.path.join(srcroot,"components","cice","src","drivers","nuopc"))
             if driver == 'mct':
-                paths.append(os.path.join(srcroot,"components","cice","src","drivers","cesm","mct"))
+                paths.append(os.path.join(srcroot,"components","cice","src","drivers","cesm"))
 
             with open(filepath_file, "w") as filepath:
                 filepath.write("\n".join(paths))

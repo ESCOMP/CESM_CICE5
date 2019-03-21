@@ -1,5 +1,7 @@
 module ice_prescribed_mod
 
+#ifdef CESMCOUPLED
+
   ! !DESCRIPTION:
   ! The prescribed ice model reads in ice concentration data from a netCDF
   ! file.  Ice thickness, temperature, the ice temperature profile are
@@ -603,5 +605,7 @@ contains
     deallocate(data1, data2, data3, data4, data5, data6)
 
   end subroutine ice_set_domain
+
+#endif
 
 end module ice_prescribed_mod

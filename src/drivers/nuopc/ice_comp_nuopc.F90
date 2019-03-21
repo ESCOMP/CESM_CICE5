@@ -81,8 +81,8 @@ module ice_comp_nuopc
   private :: ModelFinalize
 
   integer     , parameter :: dbug = 10
-  integer     , parameter :: debug_import = 1 ! internal debug level
-  integer     , parameter :: debug_export = 1 ! internal debug level
+  integer     , parameter :: debug_import = 0 ! internal debug level
+  integer     , parameter :: debug_export = 0 ! internal debug level
   character(*), parameter :: modName =  "(ice_comp_nuopc)"
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -290,89 +290,123 @@ contains
     !----------------------------------------------------------------------------
 
     ! Get orbital values
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, rc=rc)
+    ! Note that these values are obtained in a call to init_orbit in ice_shortwave.F90
+    ! if CESMCOUPLED is not defined
+    call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) eccen
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, rc=rc)
+    if (isPresent) then
+       read(cvalue,*) eccen
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) obliqr
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, rc=rc)
+    if (isPresent) then
+       read(cvalue,*) obliqr
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) lambm0
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, rc=rc)
+    if (isPresent) then
+       read(cvalue,*) lambm0
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) mvelpp
-
-    ! Determine start type
-
-    call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) starttype
-
-    if (trim(starttype) == trim('startup')) then
-       runtype = "initial"
-    else if (trim(starttype) == trim('continue') ) then
-       runtype = "continue"
-    else if (trim(starttype) == trim('branch')) then
-       runtype = "continue"
-    else
-       call shr_sys_abort( subname//' ERROR: unknown starttype' )
+    if (isPresent) then
+       read(cvalue,*) mvelpp
     end if
 
-    ! Note that in the mct version the atm was initialized first so that nextsw_cday could be passed to the other
-    ! components - this assumed that cam or datm was ALWAYS initialized first.
-    ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just what cam was setting
-    ! it as the current calendar day
-    ! TOOD: need to get the perpetual run working
-    ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
-
-    if (trim(runtype) /= 'initial') then
-       nextsw_cday = -1.0_r8
+    ! Determine runtype and possibly nextsw_cday
+    call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, isPresent=isPresent, rc=rc)
+    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       read(cvalue,*) starttype
+       if (trim(starttype) == trim('startup')) then
+          runtype = "initial"
+       else if (trim(starttype) == trim('continue') ) then
+          runtype = "continue"
+       else if (trim(starttype) == trim('branch')) then
+          runtype = "continue"
+       else
+          call shr_sys_abort( subname//' ERROR: unknown starttype' )
+       end if
+       ! Note that in the mct version the atm was initialized first so that nextsw_cday could be passed to the other
+       ! components - this assumed that cam or datm was ALWAYS initialized first.
+       ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just what cam was setting
+       ! it as the current calendar day
+       ! TOOD (mvertens, 2019-03-21): need to get the perpetual run working
+       ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
+     
+       if (trim(runtype) /= 'initial') then
+          nextsw_cday = -1.0_r8
+       else
+          call ESMF_ClockGet( clock, currTime=currTime, rc=rc )
+          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
     else
-       call ESMF_ClockGet( clock, currTime=currTime, rc=rc )
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       ! This would be the NEMS branch
+       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is 
+       ! simply a CPP variable declaratino of NEMSCOUPLED
+
+       runtype = 'initial' ! determined from the namelist in ice_init if CESMCOUPLED is not defined
     end if
 
     ! Determine single column info
-
-    call NUOPC_CompAttributeGet(gcomp, name='scmlon', value=cvalue, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='single_column', value=cvalue, isPresent=isPresentrc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) scmlon
+    if (isPresent) then
+       read(cvalue,*) single_column
+    else
+       single_column = .false.
+    end if
+    if (single_column) then
+       ! Must have these attributes present
+       call NUOPC_CompAttributeGet(gcomp, name='scmlon', value=cvalue, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scmlon
+       call NUOPC_CompAttributeGet(gcomp, name='scmlat', value=cvalue, rc=rc)
+       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scmlat
+    end if
 
-    call NUOPC_CompAttributeGet(gcomp, name='scmlat', value=cvalue, rc=rc)
+    ! Determine runid
+    call NUOPC_CompAttributeGet(gcomp, name='case_name', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) scmlat
+    if (isPresent) then
+       read(cvalue,*) runid
+    else
+       runid = 'unknown'  ! read in from the namelist in ice_init.F90 if CESMCOUPLED is not defined
+    end if
 
-    call NUOPC_CompAttributeGet(gcomp, name='single_column', value=cvalue, rc=rc)
+    ! Determine tfreeze_option, flux convertence before call to cice_init
+    call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) single_column
+    if (.not. isPresent) then
+       tfrz_option = 'mushy'  ! TODO: is this right? This must be the same as mom is using for the calculation.
+    end if
 
-    ! Determine case name, tfreeze_option, flux convertence before call to cice_init
-
-    call NUOPC_CompAttributeGet(gcomp, name='case_name', value=cvalue, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) runid
+    if (isPresent) then
+       read(cvalue,*) flux_convergence_tolerance
+    else
+       flux_convergence_tolerance = 0._r8
+    end if
 
-    call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       read(cvalue,*) flux_convergence_max_iteration
+    else
+       flux_convergence_max_iteration = 5
+    end if
 
-    call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak_mod", value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) flux_convergence_tolerance
-
-    call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) flux_convergence_max_iteration
-
-    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak_mod", value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) use_coldair_outbreak_mod
+    if (isPresent) then
+       read(cvalue,*) use_coldair_outbreak_mod
+    else
+       use_coldair_outbreak_mod = .false.
+    end if
 
     ! Get clock information before call to cice_init
 
@@ -417,6 +451,8 @@ contains
     ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
 
     call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, shrloglev)
+
+    call shr_file_setLogLevel(1)
 
     ! *** Initialize cice ***
     ! Assume that always get atmospheric aerosols to cice (atm_aero no longer needed as flag)-
@@ -718,14 +754,18 @@ contains
     call ice_realize_fields(gcomp, mesh=Emesh, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
+#ifdef CESMCOUPLED    
     !-----------------------------------------------------------------
     ! Prescribed ice initialization - first get compid
     !-----------------------------------------------------------------
+
     call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) compid  ! convert from string to integer
 
+    ! Having this if-defd means that MCT does not need to be build in a NEMS configuration
     call ice_prescribed_init(lmpicom, compid, gindex_ice)
+#endif
 
     !-----------------------------------------------------------------
     ! Create cice export state
@@ -822,6 +862,7 @@ contains
     integer                    :: tod_sync   ! Sync current time of day (sec)
     character(CL)              :: restart_date
     character(CL)              :: restart_filename
+    logical                    :: isPresent
     integer                    :: dbrc
     character(*)   , parameter :: F00   = "('(ice_comp_nuopc) ',2a,i8,d21.14)"
     character(len=*),parameter  :: subname=trim(modName)//':(ModelAdvance) '
@@ -844,6 +885,8 @@ contains
 
     call shr_file_getLogUnit (shrlogunit)
     call shr_file_setLogUnit (nu_diag)
+    call shr_file_getLogLevel(shrloglev)
+    call shr_file_setLogLevel(1)
 
     !--------------------------------
     ! Query the Component for its clock, importState and exportState
@@ -871,22 +914,26 @@ contains
     !--------------------------------
     ! Obtain orbital values
     !--------------------------------
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) eccen
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, rc=rc)
+    if (isPresent) then
+       read(cvalue,*) eccen
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) obliqr
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, rc=rc)
+    if (isPresent) then
+       read(cvalue,*) obliqr
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) lambm0
-
-    call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, rc=rc)
+    if (isPresent) then
+       read(cvalue,*) lambm0
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) mvelpp
+    if (isPresent) then
+       read(cvalue,*) mvelpp
+    end if
 
     !--------------------------------
     ! check that cice internal time is in sync with master clock before timestep update
@@ -994,6 +1041,7 @@ contains
 
     ! reset shr logging to my original values
     call shr_file_setLogUnit (shrlogunit)
+    call shr_file_setLogLevel(shrloglev)
 
     !--------------------------------
     ! stop timers and print timer info
@@ -1018,6 +1066,7 @@ contains
     endif
 
     call t_stopf ('cice_run_total')
+
     ! Need to stop this at the end of every run phase in a coupled run.
     call ice_timer_stop(timer_total)
     if (stop_now) then
@@ -1026,6 +1075,8 @@ contains
     endif
 
   105  format( A, 2i8, A, f10.2, A, f10.2, A)
+
+    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
 
   end subroutine ModelAdvance
 
