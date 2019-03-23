@@ -19,7 +19,6 @@ module ice_comp_nuopc
   use shr_sys_mod           , only : shr_sys_abort
   use shr_log_mod           , only : shr_log_Unit
   use shr_file_mod          , only : shr_file_getlogunit, shr_file_setlogunit
-  use shr_file_mod          , only : shr_file_getloglevel, shr_file_setloglevel
   use shr_file_mod          , only : shr_file_setIO, shr_file_getUnit
   use shr_string_mod        , only : shr_string_listGetNum
   use shr_orb_mod           , only : shr_orb_decl
@@ -98,12 +97,11 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    integer :: dbrc
     character(len=*),parameter  :: subname=trim(modName)//':(SetServices) '
     !--------------------------------
 
     rc = ESMF_SUCCESS
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     ! the NUOPC gcomp component will register the generic methods
     call NUOPC_CompDerive(gcomp, model_routine_SS, rc=rc)
@@ -138,7 +136,7 @@ contains
          specRoutine=ModelFinalize, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
   end subroutine SetServices
 
@@ -230,14 +228,12 @@ contains
     integer                 :: dtime              ! time step
     integer                 :: lmpicom
     integer                 :: shrlogunit         ! original log unit
-    integer                 :: shrloglev          ! original log level
     character(len=cs)       :: starttype          ! infodata start type
     integer                 :: lsize              ! local size of coupling array
     character(len=512)      :: diro
     character(len=512)      :: logfile
     logical                 :: isPresent
     integer                 :: localPet
-    integer                 :: dbrc
     integer                 :: n,c,g,i,j,m        ! indices
     integer                 :: iblk, jblk         ! indices
     integer                 :: ig, jg             ! indices
@@ -260,7 +256,7 @@ contains
     !--------------------------------
 
     rc = ESMF_SUCCESS
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     !----------------------------------------------------------------------------
     ! generate local mpi comm
@@ -286,7 +282,7 @@ contains
     call t_startf ('cice_init_total')
 
     !----------------------------------------------------------------------------
-    ! Initialize cice - needed in realize phase to get grid information
+    ! Determine attributes - also needed in realize phase to get grid information
     !----------------------------------------------------------------------------
 
     ! Get orbital values
@@ -351,7 +347,7 @@ contains
     end if
 
     ! Determine single column info
-    call NUOPC_CompAttributeGet(gcomp, name='single_column', value=cvalue, isPresent=isPresentrc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='single_column', value=cvalue, isPresent=isPresent, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) single_column
@@ -446,16 +442,19 @@ contains
        call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
     end if
 
+    !----------------------------------------------------------------------------
+    ! Set cice logging
+    !----------------------------------------------------------------------------
     ! Note that sets the nu_diag module variable in ice_fileunits
     ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
     ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
 
-    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, shrloglev)
+    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit)
 
-    call shr_file_setLogLevel(1)
+    !----------------------------------------------------------------------------
+    ! Initialize cice
+    !----------------------------------------------------------------------------
 
-    ! *** Initialize cice ***
-    ! Assume that always get atmospheric aerosols to cice (atm_aero no longer needed as flag)-
     ! Note that cice_init also sets time manager info as well as mpi communicator info,
     ! including master_task and my_task
 
@@ -811,14 +810,13 @@ contains
     call ESMF_AttributeSet(comp, "ResponsiblePartyRole", "contact", convention=convCIM, purpose=purpComp, rc=rc)
 #endif
 
-    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
     !---------------------------------------------------------------------------
     ! Reset shr logging to original values
     !---------------------------------------------------------------------------
 
     call shr_file_setLogUnit (shrlogunit)
-    call shr_file_setLogLevel(shrloglev)
 
     call t_stopf ('cice_init_total')
 
@@ -847,7 +845,6 @@ contains
     type(ESMF_State)           :: importState, exportState
     character(ESMF_MAXSTR)     :: cvalue
     integer                    :: shrlogunit ! original log unit
-    integer                    :: shrloglev  ! original log level
     integer                    :: k,n        ! index
     logical                    :: stop_now   ! .true. ==> stop at the end of this run phase
     integer                    :: ymd        ! Current date (YYYYMMDD)
@@ -863,13 +860,12 @@ contains
     character(CL)              :: restart_date
     character(CL)              :: restart_filename
     logical                    :: isPresent
-    integer                    :: dbrc
     character(*)   , parameter :: F00   = "('(ice_comp_nuopc) ',2a,i8,d21.14)"
     character(len=*),parameter  :: subname=trim(modName)//':(ModelAdvance) '
     !--------------------------------
 
     rc = ESMF_SUCCESS
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     !--------------------------------
     ! Turn on timers
@@ -885,8 +881,6 @@ contains
 
     call shr_file_getLogUnit (shrlogunit)
     call shr_file_setLogUnit (nu_diag)
-    call shr_file_getLogLevel(shrloglev)
-    call shr_file_setLogLevel(1)
 
     !--------------------------------
     ! Query the Component for its clock, importState and exportState
@@ -956,7 +950,7 @@ contains
           write(nu_diag,*)' cice ymd=',ymd     ,'  cice tod= ',tod
           write(nu_diag,*)' sync ymd=',ymd_sync,'  sync tod= ',tod_sync
        end if
-       call ESMF_LogWrite(subname//" CICE clock not in sync with ESMF model clock",ESMF_LOGMSG_ERROR, rc=dbrc)
+       call ESMF_LogWrite(subname//" CICE clock not in sync with ESMF model clock",ESMF_LOGMSG_ERROR)
        rc = ESMF_FAILURE
        return
     end if
@@ -1041,7 +1035,6 @@ contains
 
     ! reset shr logging to my original values
     call shr_file_setLogUnit (shrlogunit)
-    call shr_file_setLogLevel(shrloglev)
 
     !--------------------------------
     ! stop timers and print timer info
@@ -1076,7 +1069,7 @@ contains
 
   105  format( A, 2i8, A, f10.2, A, f10.2, A)
 
-    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
   end subroutine ModelAdvance
 
@@ -1098,14 +1091,13 @@ contains
     integer                  :: restart_n      ! Number until restart interval
     integer                  :: restart_ymd    ! Restart date (YYYYMMDD)
     type(ESMF_ALARM)         :: restart_alarm
-    integer                  :: dbrc
     character(len=128)       :: name
     integer                  :: alarmcount
     character(len=*),parameter :: subname=trim(modName)//':(ModelSetRunClock) '
     !--------------------------------
 
     rc = ESMF_SUCCESS
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     ! query the Component for its clocks
     call NUOPC_ModelGet(gcomp, driverClock=dclock, modelClock=mclock, rc=rc)
@@ -1136,7 +1128,7 @@ contains
 
        call ESMF_GridCompGet(gcomp, name=name, rc=rc)
        if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-       call ESMF_LogWrite(subname//'setting alarms for' // trim(name), ESMF_LOGMSG_INFO, rc=dbrc)
+       call ESMF_LogWrite(subname//'setting alarms for' // trim(name), ESMF_LOGMSG_INFO)
 
        !----------------
        ! Restart alarm
@@ -1179,7 +1171,7 @@ contains
     call ESMF_ClockSet(mclock, currTime=dcurrtime, timeStep=dtimestep, stopTime=mstoptime, rc=rc)
     if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
   end subroutine ModelSetRunClock
 
@@ -1190,7 +1182,6 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    integer :: dbrc
     character(*), parameter :: F00   = "('(ice_comp_nuopc) ',8a)"
     character(*), parameter :: F91   = "('(ice_comp_nuopc) ',73('-'))"
     character(len=*),parameter  :: subname=trim(modName)//':(ModelFinalize) '
@@ -1201,7 +1192,7 @@ contains
     !--------------------------------
 
     rc = ESMF_SUCCESS
-    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     if (my_task == master_task) then
        write(nu_diag,F91)
@@ -1209,7 +1200,7 @@ contains
        write(nu_diag,F91)
     end if
 
-    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO, rc=dbrc)
+    if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
   end subroutine ModelFinalize
 

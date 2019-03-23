@@ -47,14 +47,13 @@ def _build_cice():
             srcroot = case.get_value("SRCROOT")
             caseroot = case.get_value("CASEROOT")
             paths = [os.path.join(caseroot,"SourceMods","src.cice"),
-                     os.path.join(srcroot,"components","cice","src","drivers","cesm"),
                      os.path.join(srcroot,"components","cice","src","io_pio"),
                      os.path.join(srcroot,"components","cice","src","mpi"),
                      os.path.join(srcroot,"components","cice","src","source")]
             if driver == 'nuopc':
                 paths.append(os.path.join(srcroot,"components","cice","src","drivers","nuopc"))
             if driver == 'mct':
-                paths.append(os.path.join(srcroot,"components","cice","src","drivers","cesm"))
+                paths.append(os.path.join(srcroot,"components","cice","src","drivers","mct"))
 
             with open(filepath_file, "w") as filepath:
                 filepath.write("\n".join(paths))
