@@ -15,7 +15,7 @@
 module CICE_RunMod
 
   use ice_kinds_mod
-  use perf_mod      , only  t_startf, t_stopf, t_barrierf
+  use perf_mod      , only: t_startf, t_stopf, t_barrierf
   use ice_fileunits , only: nu_diag
 
   implicit none
@@ -108,10 +108,10 @@ contains
     use ice_meltpond_lvl   , only: write_restart_pond_lvl
     use ice_meltpond_topo  , only: write_restart_pond_topo
     use ice_restoring      , only: restore_ice, ice_HaloRestore
-    use ice_state          , only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
+    use ice_state          , only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl
     use ice_state          , only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl
     use ice_state          , only: tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine, tr_aero
-    use ice_step_mod       , only: prep_radiation, step_therm1, step_therm2, &
+    use ice_step_mod       , only: prep_radiation, step_therm1, step_therm2
     use ice_step_mod       , only: post_thermo, step_dynamics, step_radiation
     use ice_therm_shared   , only: calc_Tsfc
     use ice_timers         , only: ice_timer_start, ice_timer_stop
@@ -285,7 +285,7 @@ contains
     use ice_flux         , only: snowfrac
     use ice_grid         , only: tmask
     use ice_ocean        , only: oceanmixed_ice, ocean_mixed_layer
-    use ice_shortwave    , only: alvdfn, alidfn, alvdrn, alidrn, 
+    use ice_shortwave    , only: alvdfn, alidfn, alvdrn, alidrn 
     use ice_shortwave    , only: albicen, albsnon, albpndn, apeffn, snowfracn
     use ice_state        , only: aicen, aice, aice_init, nbtrcr
     use ice_therm_shared , only: calc_Tsfc
