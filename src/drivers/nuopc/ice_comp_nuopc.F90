@@ -5,66 +5,54 @@ module ice_comp_nuopc
   !----------------------------------------------------------------------------
 
   use ESMF
-  use NUOPC                 , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
-  use NUOPC                 , only : NUOPC_CompFilterPhaseMap, NUOPC_IsUpdated, NUOPC_IsAtTime
-  use NUOPC                 , only : NUOPC_CompAttributeGet, NUOPC_Advertise
-  use NUOPC                 , only : NUOPC_SetAttribute, NUOPC_CompAttributeGet, NUOPC_CompAttributeSet
-  use NUOPC_Model           , only : model_routine_SS           => SetServices
-  use NUOPC_Model           , only : model_label_Advance        => label_Advance
-  use NUOPC_Model           , only : model_label_DataInitialize => label_DataInitialize
-  use NUOPC_Model           , only : model_label_SetRunClock    => label_SetRunClock
-  use NUOPC_Model           , only : model_label_Finalize       => label_Finalize
-  use NUOPC_Model           , only : NUOPC_ModelGet, SetVM
-  use med_constants_mod     , only : R8, CS,CL
-  use shr_sys_mod           , only : shr_sys_abort
-  use shr_log_mod           , only : shr_log_Unit
-  use shr_file_mod          , only : shr_file_getlogunit, shr_file_setlogunit
-  use shr_file_mod          , only : shr_file_setIO, shr_file_getUnit
-  use shr_string_mod        , only : shr_string_listGetNum
-  use shr_orb_mod           , only : shr_orb_decl
-  use shr_const_mod         , only : shr_const_pi
-  use shr_cal_mod           , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
-  use shr_nuopc_scalars_mod , only : flds_scalar_name
-  use shr_nuopc_scalars_mod , only : flds_scalar_num
-  use shr_nuopc_scalars_mod , only : flds_scalar_index_nx
-  use shr_nuopc_scalars_mod , only : flds_scalar_index_ny
-  use shr_nuopc_scalars_mod , only : flds_scalar_index_nextsw_cday
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_chkerr
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_Clock_TimePrint
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_SetScalar
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_GetScalar
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_State_Diagnose
-  use shr_nuopc_methods_mod , only : shr_nuopc_methods_state_fldDebug
-  use shr_nuopc_time_mod    , only : shr_nuopc_time_AlarmInit
-
-  use ice_import_export,      only : ice_import, ice_export
-  use ice_import_export,      only : ice_advertise_fields, ice_realize_fields
-  use ice_domain_size,        only : nx_global, ny_global
-  use ice_domain,             only : nblocks, blocks_ice, distrb_info
-  use ice_blocks,             only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
-  use ice_blocks,             only : nblocks_tot, get_block_parameter
-  use ice_distribution,       only : ice_distributiongetblockloc
-  use ice_grid,               only : tlon, tlat, hm, tarea, ULON, ULAT
-  use ice_constants,          only : rad_to_deg
-  use ice_communicate,        only : my_task, master_task, mpi_comm_ice
-  use ice_calendar,           only : force_restart_now, write_ic
-  use ice_calendar,           only : idate, mday, time, month, daycal, time2sec, year_init
-  use ice_calendar,           only : sec, dt, calendar, calendar_type, nextsw_cday, istep
-  use ice_orbital,            only : eccen, obliqr, lambm0, mvelpp
-  use ice_kinds_mod,          only : dbl_kind, int_kind
-  use ice_scam,               only : scmlat, scmlon, single_column
-  use ice_fileunits,          only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
-  use ice_ocean,              only : tfrz_option
-  use ice_therm_shared,       only : ktherm
-  use ice_restart_shared,     only : runid, runtype, restart_dir, restart_file
-  use ice_history,            only : accum_hist
-  use ice_history_shared,     only : model_doi_url  ! TODO: add this functionality
-  use ice_prescribed_mod,     only : ice_prescribed_init
-  use ice_atmo,               only : flux_convergence_tolerance, flux_convergence_max_iteration
-  use ice_atmo,               only : use_coldair_outbreak_mod
-  use CICE_InitMod,           only : CICE_Init
-  use CICE_RunMod,            only : CICE_Run
-  use perf_mod,               only : t_startf, t_stopf, t_barrierf
+  use NUOPC              , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
+  use NUOPC              , only : NUOPC_CompFilterPhaseMap, NUOPC_IsUpdated, NUOPC_IsAtTime
+  use NUOPC              , only : NUOPC_CompAttributeGet, NUOPC_Advertise
+  use NUOPC              , only : NUOPC_SetAttribute, NUOPC_CompAttributeGet, NUOPC_CompAttributeSet
+  use NUOPC_Model        , only : model_routine_SS           => SetServices
+  use NUOPC_Model        , only : model_label_Advance        => label_Advance
+  use NUOPC_Model        , only : model_label_DataInitialize => label_DataInitialize
+  use NUOPC_Model        , only : model_label_SetRunClock    => label_SetRunClock
+  use NUOPC_Model        , only : model_label_Finalize       => label_Finalize
+  use NUOPC_Model        , only : NUOPC_ModelGet, SetVM
+  use shr_kind_mod       , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
+  use shr_sys_mod        , only : shr_sys_abort
+  use shr_file_mod       , only : shr_file_getlogunit, shr_file_setlogunit
+  use shr_string_mod     , only : shr_string_listGetNum
+  use shr_orb_mod        , only : shr_orb_decl
+  use shr_const_mod      , only : shr_const_pi
+  use shr_cal_mod        , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
+  use ice_shr_methods    , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
+  use ice_shr_methods    , only : set_component_logging, get_component_instance, log_clock_advance
+  use ice_shr_methods    , only : state_flddebug
+  use ice_import_export  , only : ice_import, ice_export
+  use ice_import_export  , only : ice_advertise_fields, ice_realize_fields
+  use ice_domain_size    , only : nx_global, ny_global
+  use ice_domain         , only : nblocks, blocks_ice, distrb_info
+  use ice_blocks         , only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
+  use ice_blocks         , only : nblocks_tot, get_block_parameter
+  use ice_distribution   , only : ice_distributiongetblockloc
+  use ice_grid           , only : tlon, tlat, hm, tarea, ULON, ULAT
+  use ice_constants      , only : rad_to_deg
+  use ice_communicate    , only : my_task, master_task, mpi_comm_ice
+  use ice_calendar       , only : force_restart_now, write_ic
+  use ice_calendar       , only : idate, mday, time, month, daycal, time2sec, year_init
+  use ice_calendar       , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
+  use ice_orbital        , only : eccen, obliqr, lambm0, mvelpp
+  use ice_kinds_mod      , only : dbl_kind, int_kind
+  use ice_scam           , only : scmlat, scmlon, single_column
+  use ice_fileunits      , only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
+  use ice_ocean          , only : tfrz_option
+  use ice_therm_shared   , only : ktherm
+  use ice_restart_shared , only : runid, runtype, restart_dir, restart_file
+  use ice_history        , only : accum_hist
+  use ice_history_shared , only : model_doi_url  ! TODO: add this functionality
+  use ice_prescribed_mod , only : ice_prescribed_init
+  use ice_atmo           , only : flux_convergence_tolerance, flux_convergence_max_iteration
+  use ice_atmo           , only : use_coldair_outbreak_mod
+  use CICE_InitMod       , only : CICE_Init
+  use CICE_RunMod        , only : CICE_Run
+  use perf_mod           , only : t_startf, t_stopf, t_barrierf
   use ice_timers
 
   implicit none
@@ -78,6 +66,12 @@ module ice_comp_nuopc
   private :: ModelAdvance
   private :: ModelSetRunClock
   private :: ModelFinalize
+
+  character(len=CL) :: flds_scalar_name = ''
+  integer           :: flds_scalar_num = 0
+  integer           :: flds_scalar_index_nx = 0
+  integer           :: flds_scalar_index_ny = 0
+  integer           :: flds_scalar_index_nextsw_cday = 0
 
   integer     , parameter :: dbug = 10
   integer     , parameter :: debug_import = 0 ! internal debug level
@@ -105,36 +99,36 @@ contains
 
     ! the NUOPC gcomp component will register the generic methods
     call NUOPC_CompDerive(gcomp, model_routine_SS, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! switching to IPD versions
     call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
          userRoutine=InitializeP0, phase=0, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! set entry point for methods that require specific implementation
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
          phaseLabelList=(/"IPDv01p1"/), userRoutine=InitializeAdvertise, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
          phaseLabelList=(/"IPDv01p3"/), userRoutine=InitializeRealize, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! attach specializing method(s)
     call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Advance, &
          specRoutine=ModelAdvance, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ESMF_MethodRemove(gcomp, label=model_label_SetRunClock, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call NUOPC_CompSpecialize(gcomp, specLabel=model_label_SetRunClock, &
          specRoutine=ModelSetRunClock, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call NUOPC_CompSpecialize(gcomp, specLabel=model_label_Finalize, &
          specRoutine=ModelFinalize, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
@@ -156,7 +150,7 @@ contains
     ! Switch to IPDv01 by filtering all other phaseMap entries
     call NUOPC_CompFilterPhaseMap(gcomp, ESMF_METHOD_INITIALIZE, &
          acceptStringList=(/"IPDv01p"/), rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
   end subroutine InitializeP0
 
@@ -171,20 +165,74 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
+    character(len=CL)  :: cvalue
+    character(len=CL)  :: logmsg
+    logical            :: isPresent, isSet
     character(len=*), parameter :: subname=trim(modName)//':(InitializeAdvertise) '
     !--------------------------------
 
-    call ice_advertise_fields(gcomp, importState, exportSTate, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldName", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       flds_scalar_name = trim(cvalue)
+       call ESMF_LogWrite(trim(subname)//' flds_scalar_name = '//trim(flds_scalar_name), ESMF_LOGMSG_INFO)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call shr_sys_abort(subname//'Need to set attribute ScalarFieldName')
+    endif
+
+    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldCount", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue, *) flds_scalar_num
+       write(logmsg,*) flds_scalar_num
+       call ESMF_LogWrite(trim(subname)//' flds_scalar_num = '//trim(logmsg), ESMF_LOGMSG_INFO)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call shr_sys_abort(subname//'Need to set attribute ScalarFieldCount')
+    endif
+
+    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNX", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) flds_scalar_index_nx
+       write(logmsg,*) flds_scalar_index_nx
+       call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_nx = '//trim(logmsg), ESMF_LOGMSG_INFO)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxGridNX')
+    endif
+
+    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNY", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) flds_scalar_index_ny
+       write(logmsg,*) flds_scalar_index_ny
+       call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_ny = '//trim(logmsg), ESMF_LOGMSG_INFO)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxGridNY')
+    endif
+
+    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxNextSwCday", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) flds_scalar_index_nextsw_cday
+       write(logmsg,*) flds_scalar_index_nextsw_cday
+       call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_nextsw_cday = '//trim(logmsg), ESMF_LOGMSG_INFO)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxNextSwCday')
+    endif
+
+    call ice_advertise_fields(gcomp, importState, exportState, flds_scalar_name, rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
   end subroutine InitializeAdvertise
 
   !===============================================================================
 
   subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
-
-    use shr_nuopc_utils_mod, only: shr_nuopc_set_component_logging
-    use shr_nuopc_utils_mod, only: shr_nuopc_get_component_instance
 
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
@@ -263,16 +311,18 @@ contains
     !----------------------------------------------------------------------------
 
     call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
     ! determine instance information
     !----------------------------------------------------------------------------
 
-    call shr_nuopc_get_component_instance(gcomp, inst_suffix, inst_index)
+    call get_component_instance(gcomp, inst_suffix, inst_index, rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     inst_name = "ICE"//trim(inst_suffix)
 
     !----------------------------------------------------------------------------
@@ -289,29 +339,29 @@ contains
     ! Note that these values are obtained in a call to init_orbit in ice_shortwave.F90
     ! if CESMCOUPLED is not defined
     call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) eccen
     end if
     call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) obliqr
     end if
     call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) lambm0
     end if
     call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) mvelpp
     end if
 
     ! Determine runtype and possibly nextsw_cday
     call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) starttype
        if (trim(starttype) == trim('startup')) then
@@ -334,9 +384,9 @@ contains
           nextsw_cday = -1.0_r8
        else
           call ESMF_ClockGet( clock, currTime=currTime, rc=rc )
-          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
           call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-          if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end if
     else
        ! This would be the NEMS branch
@@ -348,7 +398,7 @@ contains
 
     ! Determine single column info
     call NUOPC_CompAttributeGet(gcomp, name='single_column', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) single_column
     else
@@ -357,16 +407,16 @@ contains
     if (single_column) then
        ! Must have these attributes present
        call NUOPC_CompAttributeGet(gcomp, name='scmlon', value=cvalue, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        read(cvalue,*) scmlon
        call NUOPC_CompAttributeGet(gcomp, name='scmlat', value=cvalue, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        read(cvalue,*) scmlat
     end if
 
     ! Determine runid
     call NUOPC_CompAttributeGet(gcomp, name='case_name', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) runid
     else
@@ -375,13 +425,13 @@ contains
 
     ! Determine tfreeze_option, flux convertence before call to cice_init
     call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (.not. isPresent) then
        tfrz_option = 'mushy'  ! TODO: is this right? This must be the same as mom is using for the calculation.
     end if
 
     call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) flux_convergence_tolerance
     else
@@ -389,7 +439,7 @@ contains
     end if
 
     call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) flux_convergence_max_iteration
     else
@@ -397,7 +447,7 @@ contains
     end if
 
     call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak_mod", value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) use_coldair_outbreak_mod
     else
@@ -409,30 +459,30 @@ contains
     call ESMF_ClockGet( clock, &
          currTime=currTime, startTime=startTime, stopTime=stopTime, refTime=RefTime, &
          timeStep=timeStep, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ESMF_TimeGet( currTime, yy=yy, mm=mm, dd=dd, s=curr_tod, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call shr_cal_ymd2date(yy,mm,dd,curr_ymd)
 
     call ESMF_TimeGet( startTime, yy=yy, mm=mm, dd=dd, s=start_tod, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call shr_cal_ymd2date(yy,mm,dd,start_ymd)
 
     call ESMF_TimeGet( stopTime, yy=yy, mm=mm, dd=dd, s=stop_tod, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call shr_cal_ymd2date(yy,mm,dd,stop_ymd)
 
     call ESMF_TimeGet( refTime, yy=yy, mm=mm, dd=dd, s=ref_tod, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call shr_cal_ymd2date(yy,mm,dd,ref_ymd)
 
     call ESMF_TimeIntervalGet( timeStep, s=dtime, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     dt = real(dtime)
 
     call ESMF_TimeGet( currTime, calkindflag=esmf_caltype, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (esmf_caltype == ESMF_CALKIND_NOLEAP) then
        calendar_type = shr_cal_noleap
@@ -449,7 +499,8 @@ contains
     ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
     ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
 
-    call shr_nuopc_set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit)
+    call set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
     ! Initialize cice
@@ -673,7 +724,7 @@ contains
     !---------------------------------------------------------------------------
 
     DistGrid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !---------------------------------------------------------------------------
     ! Create the CICE mesh
@@ -681,25 +732,25 @@ contains
 
     ! read in the mesh
     call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     EMeshTemp = ESMF_MeshCreate(filename=trim(cvalue), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (my_task == master_task) then
        write(nu_diag,*)'mesh file for cice domain is ',trim(cvalue)
     end if
 
     ! recreate the mesh using the above distGrid
     EMesh = ESMF_MeshCreate(EMeshTemp, elementDistgrid=Distgrid, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! obtain mesh lats and lons
     call ESMF_MeshGet(Emesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     allocate(ownedElemCoords(spatialDim*numOwnedElements))
     allocate(lonMesh(numOwnedElements), latMesh(numOwnedElements))
     call ESMF_MeshGet(Emesh, ownedElemCoords=ownedElemCoords)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     do n = 1,numOwnedElements
        lonMesh(n) = ownedElemCoords(2*n-1)
@@ -750,8 +801,9 @@ contains
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call ice_realize_fields(gcomp, mesh=Emesh, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ice_realize_fields(gcomp, mesh=Emesh, &
+         flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
 #ifdef CESMCOUPLED    
     !-----------------------------------------------------------------
@@ -759,7 +811,7 @@ contains
     !-----------------------------------------------------------------
 
     call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) compid  ! convert from string to integer
 
     ! Having this if-defd means that MCT does not need to be build in a NEMS configuration
@@ -771,19 +823,19 @@ contains
     !-----------------------------------------------------------------
 
     call ice_export (exportstate, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    call shr_nuopc_methods_State_SetScalar(dble(nx_global), flds_scalar_index_nx, exportState, &
+    call State_SetScalar(dble(nx_global), flds_scalar_index_nx, exportState, &
          flds_scalar_name, flds_scalar_num, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
-    call shr_nuopc_methods_State_SetScalar(dble(ny_global), flds_scalar_index_ny, exportState, &
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call State_SetScalar(dble(ny_global), flds_scalar_index_ny, exportState, &
          flds_scalar_name, flds_scalar_num, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! TODO (mvertens, 2018-12-21): fill in iceberg_prognostic as .false.
 
     if (debug_export > 0 .and. my_task==master_task) then
-       call shr_nuopc_methods_State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
+       call State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
             idate, sec, nu_diag, rc=rc)
     end if
 
@@ -792,8 +844,8 @@ contains
     !--------------------------------
 
     if (dbug > 1) then
-       call shr_nuopc_methods_State_diagnose(exportState,subname//':ES',rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call State_diagnose(exportState,subname//':ES',rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     endif
 
 #ifdef USE_ESMF_METADATA
@@ -887,19 +939,20 @@ contains
     !--------------------------------
 
     call NUOPC_ModelGet(gcomp, modelClock=clock, importState=importState, exportState=exportState, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (dbug > 1) then
-      call shr_nuopc_methods_Clock_TimePrint(clock,subname//'clock',rc=rc)
+       call log_clock_advance(clock, 'CICE', nu_diag, rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     endif
 
     !--------------------------------
     ! Determine time of next atmospheric shortwave calculation
     !--------------------------------
 
-    call shr_nuopc_methods_State_GetScalar(importState, flds_scalar_index_nextsw_cday, nextsw_cday, &
+    call State_GetScalar(importState, flds_scalar_index_nextsw_cday, nextsw_cday, &
          flds_scalar_name, flds_scalar_num, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (my_task == master_task) then
        write(nu_diag,F00) trim(subname),' cice istep, nextsw_cday = ',istep, nextsw_cday
@@ -909,22 +962,22 @@ contains
     ! Obtain orbital values
     !--------------------------------
     call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) eccen
     end if
     call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) obliqr
     end if
     call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) lambm0
     end if
     call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, isPresent=isPresent, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (isPresent) then
        read(cvalue,*) mvelpp
     end if
@@ -939,9 +992,9 @@ contains
 
     ! model clock
     call ESMF_ClockGet( clock, currTime=currTime, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call ESMF_TimeGet( currTime, yy=yr_sync, mm=mon_sync, dd=day_sync, s=tod_sync, rc=rc )
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call shr_cal_ymd2date(yr_sync, mon_sync, day_sync, ymd_sync)
 
     ! error check
@@ -963,18 +1016,18 @@ contains
     ! The component clock does not get advanced until the end of the loop - not at the beginning
 
     call ESMF_ClockGetAlarm(clock, alarmname='alarm_restart', alarm=alarm, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (ESMF_AlarmIsRinging(alarm, rc=rc)) then
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        force_restart_now = .true.
        call ESMF_AlarmRingerOff( alarm, rc=rc )
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        call ESMF_ClockGetNextTime(clock, nextTime=nextTime, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call ESMF_TimeGet(nexttime, yy=yy, mm=mm, dd=dd, s=tod, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        write(restart_date,"(i4.4,a,i2.2,a,i2.2,a,i5.5)") yy, '-', mm, '-',dd,'-',tod
        write(restart_filename,'(4a)') trim(restart_dir), trim(restart_file), '.', trim(restart_date)
@@ -991,16 +1044,16 @@ contains
     call ice_timer_start(timer_cplrecv)
 
     call ice_import(importState, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ice_timer_stop(timer_cplrecv)
     call t_stopf ('cice_run_import')
 
     ! write Debug output
     if (debug_import  > 0 .and. my_task==master_task) then
-       call shr_nuopc_methods_State_fldDebug(importState, flds_scalar_name, 'cice_import:', &
+       call State_fldDebug(importState, flds_scalar_name, 'cice_import:', &
             idate, sec, nu_diag, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
     !--------------------------------
@@ -1022,15 +1075,15 @@ contains
     call ice_timer_start(timer_cplsend)
 
     call ice_export(exportState, rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ice_timer_stop(timer_cplsend)
     call t_stopf ('cice_run_export')
 
     if (debug_export > 0 .and. my_task==master_task) then
-       call shr_nuopc_methods_State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
+       call State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
             idate, sec, nu_diag, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
     ! reset shr logging to my original values
@@ -1047,13 +1100,13 @@ contains
     !--------------------------------
 
     call ESMF_ClockGetAlarm(clock, alarmname='alarm_stop', alarm=alarm, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (ESMF_AlarmIsRinging(alarm, rc=rc)) then
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        stop_now = .true.
        call ESMF_AlarmRingerOff( alarm, rc=rc )
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
        stop_now = .false.
     endif
@@ -1076,8 +1129,8 @@ contains
   !===============================================================================
 
   subroutine ModelSetRunClock(gcomp, rc)
-    use shr_nuopc_time_mod, only : shr_nuopc_time_set_component_stop_alarm
 
+    ! intput/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
 
@@ -1091,6 +1144,10 @@ contains
     integer                  :: restart_n      ! Number until restart interval
     integer                  :: restart_ymd    ! Restart date (YYYYMMDD)
     type(ESMF_ALARM)         :: restart_alarm
+    character(len=256)       :: stop_option    ! Stop option units
+    integer                  :: stop_n         ! Number until stop interval
+    integer                  :: stop_ymd       ! Stop date (YYYYMMDD)
+    type(ESMF_ALARM)         :: stop_alarm
     character(len=128)       :: name
     integer                  :: alarmcount
     character(len=*),parameter :: subname=trim(modName)//':(ModelSetRunClock) '
@@ -1101,13 +1158,13 @@ contains
 
     ! query the Component for its clocks
     call NUOPC_ModelGet(gcomp, driverClock=dclock, modelClock=mclock, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ESMF_ClockGet(dclock, currTime=dcurrtime, timeStep=dtimestep, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ESMF_ClockGet(mclock, currTime=mcurrtime, timeStep=mtimestep, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !--------------------------------
     ! force model clock currtime and timestep to match driver and set stoptime
@@ -1115,50 +1172,69 @@ contains
 
     mstoptime = mcurrtime + dtimestep
     call ESMF_ClockSet(mclock, currTime=dcurrtime, timeStep=dtimestep, stopTime=mstoptime, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !--------------------------------
     ! set restart and stop alarms
     !--------------------------------
 
     call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmCount=alarmCount, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (alarmCount == 0) then
 
        call ESMF_GridCompGet(gcomp, name=name, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call ESMF_LogWrite(subname//'setting alarms for' // trim(name), ESMF_LOGMSG_INFO)
 
        !----------------
        ! Restart alarm
        !----------------
        call NUOPC_CompAttributeGet(gcomp, name="restart_option", value=restart_option, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        call NUOPC_CompAttributeGet(gcomp, name="restart_n", value=cvalue, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        read(cvalue,*) restart_n
 
        call NUOPC_CompAttributeGet(gcomp, name="restart_ymd", value=cvalue, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
        read(cvalue,*) restart_ymd
 
-       call shr_nuopc_time_alarmInit(mclock, restart_alarm, restart_option, &
+       call alarmInit(mclock, restart_alarm, restart_option, &
             opt_n   = restart_n,           &
             opt_ymd = restart_ymd,         &
             RefTime = mcurrTime,           &
             alarmname = 'alarm_restart', rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        call ESMF_AlarmSet(restart_alarm, clock=mclock, rc=rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        !----------------
        ! Stop alarm
        !----------------
-       call shr_nuopc_time_set_component_stop_alarm(gcomp, rc)
-       if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+       call NUOPC_CompAttributeGet(gcomp, name="stop_option", value=stop_option, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call NUOPC_CompAttributeGet(gcomp, name="stop_n", value=cvalue, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) stop_n
+
+       call NUOPC_CompAttributeGet(gcomp, name="stop_ymd", value=cvalue, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) stop_ymd
+
+       call alarmInit(mclock, stop_alarm, stop_option, &
+            opt_n   = stop_n,           &
+            opt_ymd = stop_ymd,         &
+            RefTime = mcurrTime,           &
+            alarmname = 'alarm_stop', rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call ESMF_AlarmSet(stop_alarm, clock=mclock, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     end if
 
     !--------------------------------
@@ -1166,10 +1242,10 @@ contains
     !--------------------------------
 
     call ESMF_ClockAdvance(mclock,rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call ESMF_ClockSet(mclock, currTime=dcurrtime, timeStep=dtimestep, stopTime=mstoptime, rc=rc)
-    if (shr_nuopc_methods_ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
