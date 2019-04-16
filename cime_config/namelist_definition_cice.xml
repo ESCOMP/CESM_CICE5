@@ -1719,17 +1719,18 @@
   <!--   </values> -->
   <!-- </entry> -->
 
-  <!-- <entry id="ustar_min"> -->
-  <!--   <type>real</type> -->
-  <!--   <category>forcing</category> -->
-  <!--   <group>forcing_nml</group> -->
-  <!--   <desc> -->
-  <!--     minimum value of ocean friction velocity -->
-  <!--   </desc> -->
-  <!--   <values> -->
-  <!--     <value>0.005</value> -->
-  <!--   </values> -->
-  <!-- </entry> -->
+  <entry id="ustar_min">
+    <type>real</type>
+    <category>forcing</category>
+    <group>forcing_nml</group>
+    <desc>
+      minimum value of ocean friction velocity
+    </desc>
+    <values>
+      <value>0.005</value>
+      <value hgrid ='tx0.25v1'>0.0005</value>
+    </values>
+  </entry>
 
   <!-- <entry id="oceanmixed_ice"> -->
   <!--   <type>logical</type> -->
@@ -1862,6 +1863,7 @@
     </desc>
     <values>
       <value>.true.</value>
+      <value hgrid ='tx0.25v1'>.false.</value>
     </values>
   </entry>
 
@@ -1888,6 +1890,20 @@
     </desc>
     <values>
       <value>.false.</value>
+    </values>
+  </entry>
+
+  <entry id="tfrz_option">
+    <type>char</type>
+    <category>forcing</category>
+    <group>forcing_nml</group>
+    <desc>
+      form of ocean freezing temperature
+    </desc>
+    <valid_values>minus1p8,linear_salt,mushy</valid_values>
+    <values>
+      <value>mushy</value>
+      <value hgrid ='tx0.25v1'>linear_salt</value>
     </values>
   </entry>
 
