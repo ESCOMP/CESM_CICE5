@@ -998,7 +998,7 @@ contains
     call shr_cal_ymd2date(yr_sync, mon_sync, day_sync, ymd_sync)
 
     ! error check
-    if ( (ymd /= ymd_sync) .and. (tod /= tod_sync) ) then
+    if ( (ymd /= ymd_sync) .or. (tod /= tod_sync) ) then
        if (my_task == master_task) then
           write(nu_diag,*)' cice ymd=',ymd     ,'  cice tod= ',tod
           write(nu_diag,*)' sync ymd=',ymd_sync,'  sync tod= ',tod_sync
