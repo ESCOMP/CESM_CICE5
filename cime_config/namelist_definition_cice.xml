@@ -112,7 +112,7 @@
       restart directory
     </desc>
     <values>
-      <value>UNSET</value>
+      <value>./</value>
       <value hgrid='tx0.25v1'>./RESTART/</value>
     </values>
   </entry>
@@ -125,7 +125,7 @@
       restart filename prefix
     </desc>
     <values>
-      <value>UNSET</value>
+      <value></value>
       <value hgrid='tx0.25v1'>iced</value>
     </values>
   </entry>
@@ -327,8 +327,7 @@
       path to history output directory
     </desc>
     <values>
-      <value>UNSET</value>
-      <value hgrid='tx0.25v1'>./</value>
+      <value>./</value>
     </values>
   </entry>
 
@@ -340,8 +339,7 @@
       path to initial condition directory
     </desc>
     <values>
-      <value>UNSET</value>
-      <value hgrid='tx0.25v1'>./</value>
+      <value>./</value>
     </values>
   </entry>
 
@@ -353,8 +351,7 @@
       output file for initial condition 
     </desc>
     <values>
-      <value>UNSET</value>
-      <value hgrid='tx0.25v1'>iceh_ic</value>
+      <value>iceh_ic</value>
     </values>
   </entry>
 
@@ -521,8 +518,7 @@
       if true, include leap days
     </desc>
     <values>
-      <value>.true. </value>
-      <value hgrid="tx0.25v1">.false.</value>
+      <value>.false.</value>
     </values>
   </entry>
 
