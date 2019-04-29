@@ -562,7 +562,7 @@
     </values>
   </entry> -->
 
-  <entry id="runtype">
+<!--  <entry id="runtype">
     <type>char</type>
     <category>setup</category>
     <group>setup_nml</group>
@@ -573,7 +573,7 @@
     <values>
       <value>initial</value>
     </values>
-  </entry>
+  </entry> -->
 
   <!-- =========================== -->
   <!-- Grid info -->
