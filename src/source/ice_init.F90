@@ -241,7 +241,7 @@
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
-      ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
+      ustar_min = 0.005_dbl_kind  ! minimum friction velocity for ocean heat flux (m/s)
       l_mpond_fresh = .false.     ! logical switch for including meltpond freshwater
                                   ! flux feedback to ocean model
       fbot_xfer_type = 'constant' ! transfer coefficient type for ocn heat flux
