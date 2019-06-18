@@ -506,7 +506,7 @@
     </desc>
     <values>
       <value>.true. </value>
-      <value hgrid="tx0.25v1">.false.</value>
+      <!-- <value hgrid="tx0.25v1">.false.</value> -->
     </values>
   </entry>
 
@@ -562,7 +562,7 @@
     </values>
   </entry> -->
 
-<!--  <entry id="runtype">
+  <!--<entry id="runtype">
     <type>char</type>
     <category>setup</category>
     <group>setup_nml</group>
