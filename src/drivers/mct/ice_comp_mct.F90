@@ -93,14 +93,18 @@ module ice_comp_mct
   integer (kind=int_kind) :: ICEID
 
   !--- for coupling on other grid from gridcpl_file ---
-  type(mct_gsMap) :: gsMap_iloc  ! local gsmaps
-  type(mct_gGrid) :: dom_iloc                 ! local domain
+  type(mct_gsMap) :: gsMap_iloc    ! local gsmaps
+  type(mct_gGrid) :: dom_iloc      ! local domain
   type(mct_aVect) :: x2i_iloc, i2x_iloc
   type(mct_rearr) :: rearr_ice2iloc
   type(mct_rearr) :: rearr_iloc2ice
   integer         :: nxcpl, nycpl  ! size of coupling grid
-  logical         :: other_cplgrid    ! using different coupling grid
-
+  logical         :: other_cplgrid ! using different coupling grid
+#ifdef COMPARE_TO_NUOPC
+  logical         :: compare_to_nuopc = .true.
+#else
+  logical         :: compare_to_nuopc = .false.
+#endif
 !=======================================================================
 
 contains
@@ -224,7 +228,18 @@ contains
     if (trim(runtype) /= 'initial') then
        nextsw_cday = -1
     else
-       call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
+       if (compare_to_nuopc) then
+          ! Note that in the mct version the atm was initialized first
+          ! so that nextsw_cday could be passed to the other
+          ! components - this assumed that cam or datm was ALWAYS
+          ! initialized first.  In the nuopc version it will be easier
+          ! to assume that on startup - nextsw_cday is just the current time
+
+          call ESMF_ClockGet( Eclock, currTime=currTime, rc=rc )
+          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+       else
+          call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
+       end if
     end if
 
     !=============================================================

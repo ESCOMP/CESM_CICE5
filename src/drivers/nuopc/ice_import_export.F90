@@ -80,7 +80,6 @@ module ice_import_export
   type (fld_list_type)     :: fldsToIce(fldsMax)
   type (fld_list_type)     :: fldsFrIce(fldsMax)
   type(ESMF_GeomType_Flag) :: geomtype
-  integer, parameter       :: gridTofieldMap_mesh = 2 ! ungridded dimension is innermost
 
   integer     , parameter  :: dbug = 10        ! i/o debug messages
   character(*), parameter  :: u_FILE_u = &
@@ -207,10 +206,10 @@ contains
     ! ice/ocn fluxes computed by ice
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'net_heat_flx_to_ocn'     )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_sw_pen_to_ocn'      )
-    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_net_sw_vis_dir_flx' )
-    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_net_sw_vis_dif_flx' )
-    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_net_sw_ir_dir_flx'  )
-    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_net_sw_ir_dif_flx'  )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_sw_pen_to_ocn_vis_dir_flx' )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_sw_pen_to_ocn_vis_dif_flx' )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_sw_pen_to_ocn_ir_dir_flx'  )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_sw_pen_to_ocn_ir_dif_flx'  )
     if (send_i2x_per_cat) then
        call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_sw_pen_to_ocn_ifrac_n', &
             ungridded_lbound=1, ungridded_ubound=ncat)
@@ -892,19 +891,19 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! flux of vis dir shortwave through ice to ocean
-    call state_setexport(exportState, 'mean_net_sw_vis_dir_flx' , input=fswthruvdr, lmask=tmask, ifrac=ailohi, rc=rc)
+    call state_setexport(exportState, 'mean_sw_pen_to_ocn_vis_dir_flx' , input=fswthruvdr, lmask=tmask, ifrac=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! flux of vis dif shortwave through ice to ocean
-    call state_setexport(exportState, 'mean_net_sw_vis_dif_flx' , input=fswthruvdf, lmask=tmask, ifrac=ailohi, rc=rc)
+    call state_setexport(exportState, 'mean_sw_pen_to_ocn_vis_dif_flx' , input=fswthruvdf, lmask=tmask, ifrac=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! flux of ir dir shortwave through ice to ocean
-    call state_setexport(exportState, 'mean_net_sw_ir_dir_flx' , input=fswthruidr, lmask=tmask, ifrac=ailohi, rc=rc)
+    call state_setexport(exportState, 'mean_sw_pen_to_ocn_ir_dir_flx' , input=fswthruidr, lmask=tmask, ifrac=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! flux of ir dif shortwave through ice to ocean
-    call state_setexport(exportState, 'mean_net_sw_ir_dif_flx' , input=fswthruidf, lmask=tmask, ifrac=ailohi, rc=rc)
+    call state_setexport(exportState, 'mean_sw_pen_to_ocn_ir_dif_flx' , input=fswthruidf, lmask=tmask, ifrac=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! heat exchange with ocean
@@ -1099,7 +1098,7 @@ contains
                    field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, &
                         ungriddedLbound=(/fldlist(n)%ungridded_lbound/), &
                         ungriddedUbound=(/fldlist(n)%ungridded_ubound/), &
-                        gridToFieldMap=(/gridToFieldMap_mesh/), rc=rc)
+                        gridToFieldMap=(/2/), rc=rc)
                    if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 else
                    field = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_R8, name=stdname, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
@@ -1250,21 +1249,13 @@ contains
                 n = n+1
                 if (present(do_sum)) then ! do sum
                    if (present(ungridded_index)) then
-                      if (gridToFieldMap_mesh == 1) then
-                         output(i,j,index,iblk)  = output(i,j,index, iblk) + dataPtr2d(n,ungridded_index)
-                      else if (gridToFieldMap_mesh == 2) then
-                         output(i,j,index,iblk)  = output(i,j,index, iblk) + dataPtr2d(ungridded_index,n)
-                      end if
+                      output(i,j,index,iblk)  = output(i,j,index, iblk) + dataPtr2d(ungridded_index,n)
                    else
                       output(i,j,index,iblk)  = output(i,j,index, iblk) + dataPtr1d(n)
                    end if
                 else ! do not do sum
                    if (present(ungridded_index)) then
-                      if (gridToFieldMap_mesh == 1) then
-                         output(i,j,index,iblk)  = dataPtr2d(n,ungridded_index)
-                      else if (gridToFieldMap_mesh == 2) then
-                         output(i,j,index,iblk)  = dataPtr2d(ungridded_index,n)
-                      end if
+                      output(i,j,index,iblk)  = dataPtr2d(ungridded_index,n)
                    else
                       output(i,j,index,iblk)  = dataPtr1d(n)
                    end if
@@ -1368,19 +1359,11 @@ contains
              do i = ilo, ihi
                 n = n+1
                 if (present(do_sum) .and. present(ungridded_index)) then
-                   if (gridToFieldMap_mesh == 1) then
-                      output(i,j,iblk)  = output(i,j,iblk) + dataPtr2d(n,ungridded_index)
-                   else if (gridToFieldMap_mesh == 2) then
-                      output(i,j,iblk)  = output(i,j,iblk) + dataPtr2d(ungridded_index,n)
-                   end if
+                   output(i,j,iblk)  = output(i,j,iblk) + dataPtr2d(ungridded_index,n)
                 else if (present(do_sum)) then
                    output(i,j,iblk)  = output(i,j,iblk) + dataPtr1d(n)
                 else if (present(ungridded_index)) then
-                   if (gridToFieldMap_mesh == 1) then
-                      output(i,j,iblk)  = dataPtr2d(n,ungridded_index)
-                   else if (gridToFieldMap_mesh == 2) then
-                      output(i,j,iblk)  = dataPtr2d(ungridded_index,n)
-                   end if
+                   output(i,j,iblk)  = dataPtr2d(ungridded_index,n)
                 else
                    output(i,j,iblk) = dataPtr1d(n)
                 end if
@@ -1487,22 +1470,14 @@ contains
                 if (present(lmask) .and. present(ifrac)) then
                    if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
                       if (present(ungridded_index)) then
-                         if (gridToFieldMap_mesh == 1) then
-                            dataPtr2d(n,ungridded_index) = input(i,j,index,iblk)
-                         else if (gridToFieldMap_mesh == 2) then
-                            dataPtr2d(ungridded_index,n) = input(i,j,index,iblk)
-                         end if
+                         dataPtr2d(ungridded_index,n) = input(i,j,index,iblk)
                       else
                          dataPtr1d(n) = input(i,j,index,iblk)
                       end if
                    end if
                 else
                    if (present(ungridded_index)) then
-                      if (gridToFieldMap_mesh == 1) then
-                         dataPtr2d(n,ungridded_index) = input(i,j,index,iblk)
-                      else if (gridToFieldMap_mesh == 2) then
-                         dataPtr2d(ungridded_index,n) = input(i,j,index,iblk)
-                      end if
+                      dataPtr2d(ungridded_index,n) = input(i,j,index,iblk)
                    else
                       dataPtr1d(n) = input(i,j,index,iblk)
                    end if
@@ -1608,22 +1583,14 @@ contains
                 if (present(lmask) .and. present(ifrac)) then
                    if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
                       if (present(ungridded_index)) then
-                         if (gridToFieldMap_mesh == 1) then
-                            dataPtr2d(n,ungridded_index) = input(i,j,iblk)
-                         else if (gridToFieldMap_mesh == 2) then
-                            dataPtr2d(ungridded_index,n) = input(i,j,iblk)
-                         end if
+                         dataPtr2d(ungridded_index,n) = input(i,j,iblk)
                       else
                          dataPtr1d(n) = input(i,j,iblk)
                       end if
                    end if
                 else
                    if (present(ungridded_index)) then
-                      if (gridToFieldMap_mesh == 1) then
-                         dataPtr2d(n,ungridded_index) = input(i,j,iblk)
-                      else if (gridToFieldMap_mesh == 2) then
-                         dataPtr2d(ungridded_index,n) = input(i,j,iblk)
-                      end if
+                      dataPtr2d(ungridded_index,n) = input(i,j,iblk)
                    else
                       dataPtr1d(n) = input(i,j,iblk)
                    end if

@@ -16,14 +16,14 @@ module ice_comp_nuopc
   use NUOPC_Model        , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model        , only : NUOPC_ModelGet, SetVM
   use shr_kind_mod       , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
-  use shr_sys_mod        , only : shr_sys_abort
+  use shr_sys_mod        , only : shr_sys_abort, shr_sys_flush
   use shr_file_mod       , only : shr_file_getlogunit, shr_file_setlogunit
   use shr_string_mod     , only : shr_string_listGetNum
   use shr_orb_mod        , only : shr_orb_decl
   use shr_const_mod      , only : shr_const_pi
   use shr_cal_mod        , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
   use ice_shr_methods    , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
-  use ice_shr_methods    , only : set_component_logging, get_component_instance, log_clock_advance
+  use ice_shr_methods    , only : set_component_logging, get_component_instance
   use ice_shr_methods    , only : state_flddebug
   use ice_import_export  , only : ice_import, ice_export
   use ice_import_export  , only : ice_advertise_fields, ice_realize_fields
@@ -373,14 +373,15 @@ contains
        else
           call shr_sys_abort( subname//' ERROR: unknown starttype' )
        end if
+
        ! Note that in the mct version the atm was initialized first so that nextsw_cday could be passed to the other
        ! components - this assumed that cam or datm was ALWAYS initialized first.
-       ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just what cam was setting
-       ! it as the current calendar day
+       ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just the current time
+
        ! TOOD (mvertens, 2019-03-21): need to get the perpetual run working
-       ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
      
        if (trim(runtype) /= 'initial') then
+          ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
           nextsw_cday = -1.0_r8
        else
           call ESMF_ClockGet( clock, currTime=currTime, rc=rc )
@@ -427,7 +428,7 @@ contains
     call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, isPresent=isPresent, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (.not. isPresent) then
-       tfrz_option = 'mushy'  ! TODO: is this right? This must be the same as mom is using for the calculation.
+       tfrz_option = 'linear_salt'  ! TODO: is this right? This must be the same as mom is using for the calculation.
     end if
 
     call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, isPresent=isPresent, rc=rc)
@@ -501,6 +502,8 @@ contains
 
     call set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call shr_file_setLogUnit (shrlogunit)
 
     !----------------------------------------------------------------------------
     ! Initialize cice
@@ -864,16 +867,12 @@ contains
 
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
-    !---------------------------------------------------------------------------
-    ! Reset shr logging to original values
-    !---------------------------------------------------------------------------
-
-    call shr_file_setLogUnit (shrlogunit)
-
     call t_stopf ('cice_init_total')
 
     deallocate(gindex_ice)
     deallocate(gindex)
+
+    call shr_sys_flush(nu_diag)
 
   end subroutine InitializeRealize
 
@@ -940,11 +939,6 @@ contains
 
     call NUOPC_ModelGet(gcomp, modelClock=clock, importState=importState, exportState=exportState, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    if (dbug > 1) then
-       call log_clock_advance(clock, 'CICE', nu_diag, rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    endif
 
     !--------------------------------
     ! Determine time of next atmospheric shortwave calculation
