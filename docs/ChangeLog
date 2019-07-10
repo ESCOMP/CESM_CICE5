@@ -1,4 +1,36 @@
 ===============================================================
+cice5_20190322
+Originator: dbailey
+Date:  21  Mar 2019
+Version: 5.0
+One-line: Fix some SIMIP history fields.
+
+Fix sidmassevapsubl, sndmassubl, and sndmasssnf. These
+were mutiplied by rhos and shouldn't have been. These history
+fields will have different answers.
+
+        modified:   src/source/ice_history.F90
+
+===============================================================
+cice5_20190321
+Originator: dbailey
+Date:  21 Mar 2019
+Version: 5.0
+One-line: CIME updates from Jim.
+
+        modified:  cime_config/buildlib
+
+
+===============================================================
+cice5_20190318
+Originator: dbailey
+Date:  18 Mar 2019
+Version: 5.0
+One-line: New MOM grid from Alper.
+
+        modified:   cime_config/namelist_definition_cice.xml
+
+===============================================================
 cice5_20190204
 Originator: jedwards
 Date:  04 Feb 2019
