@@ -27,7 +27,7 @@ module ice_import_export
   use ice_state       , only: tr_aero, tr_iso, tr_iage, tr_FY, tr_pond, tr_lvl
   use ice_domain      , only: nblocks, blocks_ice, halo_info, distrb_info
   use ice_domain_size , only: nx_global, ny_global, block_size_x, block_size_y, max_blocks, ncat
-  use ice_grid        , only: tlon, tlat, tarea, tmask, anglet, hm, ocn_gridcell_frac
+  use ice_grid        , only: tlon, tlat, tarea, tmask, anglet, hm
   use ice_grid        , only: grid_type, t2ugrid_vector
   use ice_boundary    , only: ice_HaloUpdate
   use ice_fileunits   , only: nu_diag

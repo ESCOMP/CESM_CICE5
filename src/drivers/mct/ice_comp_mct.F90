@@ -186,6 +186,9 @@ contains
     call seq_cdata_setptrs(cdata_i, ID=ICEID, mpicom=mpicom_loc, &
          gsMap=gsMap_ice, dom=dom_i, infodata=infodata)
 
+    ! Determine time of next atmospheric shortwave calculation
+    call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
+
     ! Determine if aerosols are coming from the coupler
     call seq_infodata_GetData(infodata, atm_aero=atm_aero )
 
@@ -237,8 +240,6 @@ contains
 
           call ESMF_ClockGet( Eclock, currTime=currTime, rc=rc )
           call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-       else
-          call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
        end if
     end if
 

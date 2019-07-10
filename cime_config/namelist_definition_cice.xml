@@ -505,8 +505,7 @@
       if true, use time written in core restart file
     </desc>
     <values>
-      <value>.true. </value>
-      <!-- <value hgrid="tx0.25v1">.false.</value> -->
+      <value>.true.</value>
     </values>
   </entry>
 

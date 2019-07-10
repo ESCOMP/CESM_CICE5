@@ -35,7 +35,7 @@
 !         Philip W. Jones, LANL
 !         William H. Lipscomb, LANL
 
-      subroutine CICE_Run(restart_filename)
+      subroutine CICE_Run
 
       use ice_aerosol, only: faero_default
       use ice_algae, only: get_forcing_bgc
@@ -46,8 +46,6 @@
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
       use ice_zbgc_shared, only: skl_bgc
-
-      character(len=*), intent(in), optional :: restart_filename
 
    !--------------------------------------------------------------------
    !  initialize error code and step timer
@@ -70,11 +68,7 @@
 
          call calendar(time)    ! at the end of the timestep
 
-         if (present(restart_filename)) then
-            call ice_step(restart_filename)
-         else
-            call ice_step()
-         end if
+         call ice_step
 
 !         if (stop_now >= 1) exit timeLoop
 
@@ -95,7 +89,7 @@
 !  author Elizabeth C. Hunke, LANL
 !         William H. Lipscomb, LANL
 
-      subroutine ice_step(restart_filename)
+      subroutine ice_step
 
       use ice_age, only: write_restart_age
       use ice_aerosol, only: write_restart_aero
@@ -131,8 +125,6 @@
       use ice_zbgc_shared, only: skl_bgc
       use ice_communicate, only: MPI_COMM_ICE
       use ice_prescribed_mod
-
-      character(len=*), intent(in), optional :: restart_filename
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index
@@ -247,11 +239,7 @@
 
          call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
-            if (present(restart_filename)) then
-               call dumpfile(filename_spec=restart_filename)  ! core variables for restarting
-            else
-               call dumpfile()
-            end if
+            call dumpfile     ! core variables for restarting
             if (tr_iage)      call write_restart_age
             if (tr_FY)        call write_restart_FY
             if (tr_lvl)       call write_restart_lvl
