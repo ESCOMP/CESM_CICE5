@@ -346,16 +346,11 @@
 
             if (hicen_init(ij,n)   > puny .and. &
                 hicen_init(ij,n+1) > puny) then
-
                  ! interpolate between adjacent category growth rates
-
-               if (hicen_init(ij,n+1) == hicen_init(ij,n)) then
-                  slope = 0.
-               else
-                  slope = (dhicen(ij,n+1) - dhicen(ij,n)) / (hicen_init(ij,n+1) - hicen_init(ij,n))
-                  hbnew(ij,n) = hin_max(n) + dhicen(ij,n) + slope * (hin_max(n) - hicen_init(ij,n))
-               end if
-
+               slope = (dhicen(ij,n+1) - dhicen(ij,n)) / &
+                       (hicen_init(ij,n+1) - hicen_init(ij,n))
+               hbnew(ij,n) = hin_max(n) + dhicen(ij,n) &
+                            + slope * (hin_max(n) - hicen_init(ij,n))
             elseif (hicen_init(ij,n) > puny) then ! hicen_init(n+1)=0
                hbnew(ij,n) = hin_max(n) + dhicen(ij,n)
             elseif (hicen_init(ij,n+1) > puny) then ! hicen_init(n)=0

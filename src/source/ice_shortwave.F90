@@ -993,8 +993,8 @@
 
          swabs   = swabsv + swabsi
 
-         fswpenvdr = swvdr(i,j) * (c1-alvdrni(i,j)) * (c1-asnow) * i0vis
-         fswpenvdf = swvdf(i,j) * (c1-alvdfni(i,j)) * (c1-asnow) * i0vis
+         fswpenvdr(i,j) = swvdr(i,j) * (c1-alvdrni(i,j)) * (c1-asnow) * i0vis
+         fswpenvdf(i,j) = swvdf(i,j) * (c1-alvdfni(i,j)) * (c1-asnow) * i0vis
 
           ! no penetrating radiation in near IR
 !         fswpenidr = swidr(i,j) * (c1-alidrni(i,j)) * (c1-asnow) * i0nir
