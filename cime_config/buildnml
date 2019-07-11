@@ -139,12 +139,6 @@ def _create_namelists(case, confdir, infile, nmlgen):
         if sstice_year_end== 'UNSET':
             expect(False,  "%s must be set for cice prescribed mode" %sstice_year_end)
 
-    # set restart option
-    if case.get_value('CONTINUE_RUN'):
-        nmlgen.set_value('use_restart_time', value='.true.')
-    else:
-        nmlgen.set_value('use_restart_time', value='.false.')
-
     #----------------------------------------------------
     # Write out namelist groups
     #----------------------------------------------------
