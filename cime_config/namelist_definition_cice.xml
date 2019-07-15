@@ -1712,18 +1712,18 @@
   <!--   </values> -->
   <!-- </entry> -->
 
-  <!-- <entry id="ustar_min"> -->
-  <!--   <type>real</type> -->
-  <!--   <category>forcing</category> -->
-  <!--   <group>forcing_nml</group> -->
-  <!--   <desc> -->
-  <!--     minimum value of ocean friction velocity -->
-  <!--   </desc> -->
-  <!--   <values> -->
-  <!--     <value>0.005</value> -->
-  <!--     <value hgrid ='tx0.25v1'>0.0005</value> -->
-  <!--   </values> -->
-  <!-- </entry> -->
+  <entry id="ustar_min">
+    <type>real</type>
+    <category>forcing</category>
+    <group>forcing_nml</group>
+    <desc>
+      minimum value of ocean friction velocity
+    </desc>
+    <values>
+      <value>0.005</value>
+      <value hgrid ='tx0.25v1'>0.0005</value>
+    </values>
+  </entry>
 
   <!-- <entry id="oceanmixed_ice"> -->
   <!--   <type>logical</type> -->
