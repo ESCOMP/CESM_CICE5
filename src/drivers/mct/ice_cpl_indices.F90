@@ -1,5 +1,5 @@
 module ice_cpl_indices
-  
+
   use seq_flds_mod
   use mct_mod
   use ice_domain_size, only: ncat
@@ -10,25 +10,25 @@ module ice_cpl_indices
   SAVE
   public                               ! By default make data private
 
-  ! ice -> drv 
+  ! ice -> drv
 
   integer :: index_i2x_Si_ifrac        ! fractional ice coverage wrt ocean
   integer :: index_i2x_Si_snowh        ! snow height (m)
-  integer :: index_i2x_Si_t            ! temperature                     
-  integer :: index_i2x_Si_tref         ! 2m reference temperature        
-  integer :: index_i2x_Si_qref         ! 2m reference specific humidity  
+  integer :: index_i2x_Si_t            ! temperature
+  integer :: index_i2x_Si_tref         ! 2m reference temperature
+  integer :: index_i2x_Si_qref         ! 2m reference specific humidity
   integer :: index_i2x_Si_logz0        ! surface roughness length (m)
-  integer :: index_i2x_Si_avsdr        ! albedo: visible, direct         
-  integer :: index_i2x_Si_avsdf        ! albedo: near ir, direct         
-  integer :: index_i2x_Si_anidr        ! albedo: visible, diffuse        
-  integer :: index_i2x_Si_anidf        ! albedo: near ir, diffuse        
+  integer :: index_i2x_Si_avsdr        ! albedo: visible, direct
+  integer :: index_i2x_Si_avsdf        ! albedo: near ir, direct
+  integer :: index_i2x_Si_anidr        ! albedo: visible, diffuse
+  integer :: index_i2x_Si_anidf        ! albedo: near ir, diffuse
   integer :: index_i2x_Si_u10          ! 10m wind
-  integer :: index_i2x_Faii_lwup       ! upward longwave heat flux  
-  integer :: index_i2x_Faii_lat        ! latent          heat flux  
-  integer :: index_i2x_Faii_sen        ! sensible        heat flux      
-  integer :: index_i2x_Faii_evap       ! evaporation    water flux      
-  integer :: index_i2x_Faii_taux       ! wind stress, zonal            
-  integer :: index_i2x_Faii_tauy       ! wind stress, meridional       
+  integer :: index_i2x_Faii_lwup       ! upward longwave heat flux
+  integer :: index_i2x_Faii_lat        ! latent          heat flux
+  integer :: index_i2x_Faii_sen        ! sensible        heat flux
+  integer :: index_i2x_Faii_evap       ! evaporation    water flux
+  integer :: index_i2x_Faii_taux       ! wind stress, zonal
+  integer :: index_i2x_Faii_tauy       ! wind stress, meridional
   integer :: index_i2x_Faii_swnet      ! sw: net
   integer :: index_i2x_Fioi_swpen      ! sw: net penetrating ice
   integer :: index_i2x_Fioi_melth      ! heat  flux from melting ice (<0)
@@ -43,15 +43,15 @@ module ice_cpl_indices
   integer :: index_i2x_Si_ifrac_n(ncat)          ! fractional ice coverage wrt ocean per thickness category
   integer :: index_i2x_PFioi_swpen_ifrac_n(ncat) ! sw: net penetrating ice per thickness category
 
-  integer :: index_i2x_Si_qref_HDO     ! 2m reference specific humidity  
-  integer :: index_i2x_Si_qref_16O     ! 2m reference specific humidity  
-  integer :: index_i2x_Si_qref_18O     ! 2m reference specific humidity  
+  integer :: index_i2x_Si_qref_HDO     ! 2m reference specific humidity
+  integer :: index_i2x_Si_qref_16O     ! 2m reference specific humidity
+  integer :: index_i2x_Si_qref_18O     ! 2m reference specific humidity
   integer :: index_i2x_Fioi_meltw_HDO  ! isotope melt water flux
   integer :: index_i2x_Fioi_meltw_16O  ! isotope melt water flux
   integer :: index_i2x_Fioi_meltw_18O  ! isotope melt water flux
-  integer :: index_i2x_Faii_evap_HDO   ! isotope evaporation water flux      
-  integer :: index_i2x_Faii_evap_16O   ! isotope evaporation water flux      
-  integer :: index_i2x_Faii_evap_18O   ! isotope evaporation water flux      
+  integer :: index_i2x_Faii_evap_HDO   ! isotope evaporation water flux
+  integer :: index_i2x_Faii_evap_16O   ! isotope evaporation water flux
+  integer :: index_i2x_Faii_evap_18O   ! isotope evaporation water flux
 
   ! drv -> ice
 
@@ -70,14 +70,14 @@ module ice_cpl_indices
   integer :: index_x2i_So_dhdx         ! ocn surface slope, zonal
   integer :: index_x2i_So_dhdy         ! ocn surface slope, meridional
   integer :: index_x2i_Faxa_lwdn       ! downward lw heat flux
-  integer :: index_x2i_Faxa_rain       ! prec: liquid 
-  integer :: index_x2i_Faxa_snow       ! prec: frozen 
+  integer :: index_x2i_Faxa_rain       ! prec: liquid
+  integer :: index_x2i_Faxa_snow       ! prec: frozen
   integer :: index_x2i_Faxa_swndr      ! sw: nir direct  downward
   integer :: index_x2i_Faxa_swvdr      ! sw: vis direct  downward
   integer :: index_x2i_Faxa_swndf      ! sw: nir diffuse downward
   integer :: index_x2i_Faxa_swvdf      ! sw: vis diffuse downward
   integer :: index_x2i_Faxa_swnet      ! sw: net
-  integer :: index_x2i_Fioo_q          ! ocn freeze or melt heat  
+  integer :: index_x2i_Fioo_q          ! ocn freeze or melt heat
   integer :: index_x2i_Faxa_bcphidry   ! flux: Black Carbon hydrophilic dry deposition
   integer :: index_x2i_Faxa_bcphodry   ! flux: Black Carbon hydrophobic dry deposition
   integer :: index_x2i_Faxa_bcphiwet   ! flux: Black Carbon hydrophilic wet deposition
@@ -154,7 +154,7 @@ contains
 !   Needed for ISOTOPES.
 
     index_i2x_Fioi_meltw_HDO = 0
-    index_i2x_Fioi_meltw_16O = 0 
+    index_i2x_Fioi_meltw_16O = 0
     index_i2x_Fioi_meltw_18O = 0
     index_i2x_Faii_evap_HDO  = 0
     index_i2x_Faii_evap_16O  = 0
@@ -223,7 +223,7 @@ contains
 
 !   Needed for ISOTOPES.
 
-    index_x2i_Sa_shum_16O   = 0 
+    index_x2i_Sa_shum_16O   = 0
     index_x2i_Sa_shum_18O   = 0
     index_x2i_Sa_shum_HDO   = 0
     index_x2i_Faxa_rain_16O = 0

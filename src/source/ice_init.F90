@@ -241,7 +241,7 @@
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
-      ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
+      ustar_min = 0.005           ! minimum friction velocity for ocean heat flux (m/s)
       l_mpond_fresh = .false.     ! logical switch for including meltpond freshwater
                                   ! flux feedback to ocean model
       fbot_xfer_type = 'constant' ! transfer coefficient type for ocn heat flux
@@ -391,10 +391,14 @@
          history_file  = trim(runid) // ".cice" // trim(inst_suffix) //".h"
          restart_file  = trim(runid) // ".cice" // trim(inst_suffix) //".r"
          incond_file   = trim(runid) // ".cice" // trim(inst_suffix) //".i"
-         inquire(file='ice_modelio.nml'//trim(inst_suffix),exist=exists)
-         if (exists) then
-            call get_fileUnit(nu_diag)
-            call shr_file_setIO('ice_modelio.nml'//trim(inst_suffix),nu_diag)
+         ! Note the nuopc cap will set nu_diag before this point - so just
+         ! need to check that it is non-zero first
+         if (nu_diag == ice_stdout) then
+            inquire(file='ice_modelio.nml'//trim(inst_suffix),exist=exists)
+            if (exists) then
+               call get_fileUnit(nu_diag)
+               call shr_file_setIO('ice_modelio.nml'//trim(inst_suffix),nu_diag)
+            end if
          end if
       else
          ! each task gets unique ice log filename when if test is true, for debugging

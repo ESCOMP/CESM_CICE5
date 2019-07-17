@@ -97,13 +97,17 @@ def buildcpp(case):
 
     if cice_mode == 'prescribed':
         ntr_aero = 0
+    elif "tx0.25" in hgrid:
+        ntr_aero = 0
     else:
         ntr_aero = 3
     ntr_aero = set_nondefault_cpp(cice_config_opts, "ntr_aero", ntr_aero)
 
-    # set number of bgc tracers (valid values are 0->10)
+    # set number of number of bio grid layers (valid values are 0->10)
     if cice_mode == 'prescribed':
         nbgclyr = 0
+    elif "tx0.25" in hgrid:
+        nbgclyr = 7
     else:
         nbgclyr = 3
     nbgclyr = set_nondefault_cpp(cice_config_opts, "nbgclyr", nbgclyr)
@@ -141,11 +145,15 @@ def buildcpp(case):
         nicelyr = 4
     elif "ar9v" in hgrid:
         nicelyr = 7
+    elif "tx0.25" in hgrid:
+        nicelyr = 7
     else:
         nicelyr = 8
 
     # set number of snow layers
     if phys == "cice4":
+        nsnwlyr = 1
+    elif "tx0.25" in hgrid:
         nsnwlyr = 1
     else:
         nsnwlyr = 3
@@ -168,15 +176,20 @@ def buildcpp(case):
     cice_blcky   = case.get_value("CICE_BLCKY")
     cice_mxblcks = case.get_value("CICE_MXBLCKS")
 
-    cice_cppdefs = " -DCESMCOUPLED -Dncdf -DNUMIN=11 -DNUMAX=99 " \
+    comp_atm = case.get_value("COMP_ATM")
+    comp_ocn = case.get_value("COMP_OCN")
+    cice_cppdefs = " -Dncdf -DNUMIN=11 -DNUMAX=99 " \
                    " -DNICECAT=%s -DNXGLOB=%s -DNYGLOB=%s -DNTRAERO=%s -DNTRISO=%s" \
                    " -DNBGCLYR=%s -DNICELYR=%s -DNSNWLYR=%s"  \
                    " -DTRAGE=%s -DTRFY=%s -DTRLVL=%s -DTRPND=%s -DTRBRI=%s -DTRBGCS=%s" \
                    %(ncat,nx,ny,ntr_aero,ntr_iso,nbgclyr,nicelyr,nsnwlyr,trage,trfy,trlvl,trpnd,trbri,trbgcs)
 
+    if (comp_atm == 'fv3gfs' and comp_ocn == "mom"):
+        cice_cppdefs = cice_cppdefs + " -DNEMS_COUPLED"
+
     # trigger RASM options with ar9v grid, otherwise set CESM options
     if "ar9v" in hgrid:
-        cice_cppdefs = cice_cppdefs + "-DRASM_MODS"
+        cice_cppdefs = cice_cppdefs + " -DRASM_MODS"
 
     # determine cice_cppdefs used in build
     cice_cppdefs = cice_cppdefs + " -DBLCKX=%s -DBLCKY=%s -DMXBLCKS=%s"%(cice_blckx, cice_blcky, cice_mxblcks)

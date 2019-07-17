@@ -65,7 +65,7 @@
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
-         nu_diag            ! diagnostics output file
+         nu_diag = 0        ! diagnostics output file
 
       character (32), public :: &
          nml_filename = 'ice_in' ! namelist input file name
@@ -99,7 +99,11 @@
 
       subroutine init_fileunits
 
-         nu_diag = ice_stdout  ! default
+         ! Note - the nuopc cap sets nu_diag there - and so the following
+         ! should not be set for the nuopc cap
+         if (nu_diag == 0) then
+            nu_diag = ice_stdout  ! default
+         end if
 
          ice_IOUnitsInUse = .false.
          ice_IOUnitsInUse(ice_stdin)  = .true. ! reserve unit 5

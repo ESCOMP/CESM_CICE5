@@ -18,7 +18,7 @@ module ice_comp_mct
 #ifdef USE_ESMF_LIB
   use esmf
 #else
-  use esmf, only: ESMF_clock
+  use esmf, only: ESMF_clock, ESMF_time, ESMF_ClockGet, ESMF_TimeGet
 #endif
 
   use seq_flds_mod
@@ -93,14 +93,18 @@ module ice_comp_mct
   integer (kind=int_kind) :: ICEID
 
   !--- for coupling on other grid from gridcpl_file ---
-  type(mct_gsMap) :: gsMap_iloc  ! local gsmaps
-  type(mct_gGrid) :: dom_iloc                 ! local domain
+  type(mct_gsMap) :: gsMap_iloc    ! local gsmaps
+  type(mct_gGrid) :: dom_iloc      ! local domain
   type(mct_aVect) :: x2i_iloc, i2x_iloc
   type(mct_rearr) :: rearr_ice2iloc
   type(mct_rearr) :: rearr_iloc2ice
   integer         :: nxcpl, nycpl  ! size of coupling grid
-  logical         :: other_cplgrid    ! using different coupling grid
-
+  logical         :: other_cplgrid ! using different coupling grid
+#ifdef COMPARE_TO_NUOPC
+  logical         :: compare_to_nuopc = .true.
+#else
+  logical         :: compare_to_nuopc = .false.
+#endif
 !=======================================================================
 
 contains
@@ -160,10 +164,10 @@ contains
     integer            :: nleaps      ! number of leap days before current year
     integer            :: mpicom_loc  ! temporary mpicom
     logical (kind=log_kind) :: atm_aero
-    real(r8) :: mrss, mrss0,msize,msize0
+    real(r8)        :: mrss, mrss0,msize,msize0
+    type(ESMF_TIME) :: currTime
+    integer         :: rc
     character(len=*), parameter  :: SubName = "ice_init_mct"
-! !REVISION HISTORY:
-! Author: Mariana Vertenstein
 !EOP
 !-----------------------------------------------------------------------
 
@@ -224,7 +228,20 @@ contains
 
     ! Set nextsw_cday to -1 for continue and branch runs.
 
-    if (trim(runtype) /= 'initial') nextsw_cday = -1
+    if (trim(runtype) /= 'initial') then
+       nextsw_cday = -1
+    else
+       if (compare_to_nuopc) then
+          ! Note that in the mct version the atm was initialized first
+          ! so that nextsw_cday could be passed to the other
+          ! components - this assumed that cam or datm was ALWAYS
+          ! initialized first.  In the nuopc version it will be easier
+          ! to assume that on startup - nextsw_cday is just the current time
+
+          call ESMF_ClockGet( Eclock, currTime=currTime, rc=rc )
+          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+       end if
+    end if
 
     !=============================================================
     ! Set ice dtime to ice coupling frequency
@@ -420,10 +437,10 @@ contains
     else
        call ice_export (i2x_i%rattr)  !Send initial state to driver
     endif
-! tcraig: iceberg_prognostic is false by default in cesm1.3
-! not explicitly setting it here makes cice5 work in cesm1.1
-!    call seq_infodata_PutData( infodata, ice_prognostic=.true., &
-!      iceberg_prognostic=.false., ice_nx = nxg, ice_ny = nyg )
+    ! tcraig: iceberg_prognostic is false by default in cesm1.3
+    ! not explicitly setting it here makes cice5 work in cesm1.1
+    !    call seq_infodata_PutData( infodata, ice_prognostic=.true., &
+    !         iceberg_prognostic=.false., ice_nx = nxg, ice_ny = nyg )
     call seq_infodata_PutData( infodata, ice_prognostic=.true., &
       ice_nx = nxg, ice_ny = nyg )
     call t_stopf ('cice_mct_init')
@@ -529,6 +546,10 @@ contains
 
     ! Determine time of next atmospheric shortwave calculation
     call seq_infodata_GetData(infodata, nextsw_cday=nextsw_cday )
+
+    if (my_task == master_task) then
+       write(nu_diag,*) trim(subname),' cice istep, nextsw_cday = ',istep, nextsw_cday
+    end if
 
     ! Determine orbital parameters
     call seq_infodata_GetData(infodata, orb_eccen=eccen, orb_mvelpp=mvelpp, &
@@ -781,8 +802,7 @@ contains
     ! Initialize mct domain type
     ! lat/lon in degrees,  area in radians^2, mask is 1 (ocean), 0 (non-ocean)
     !
-    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(seq_flds_dom_coord), &
-       OtherChars=trim(seq_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init(GGrid=dom_i, CoordChars='lat:lon:hgt', OtherChars='area:aream:mask:frac', lsize=lsize )
     call mct_aVect_zero(dom_i%data)
     !
     allocate(data(lsize))
@@ -1105,8 +1125,7 @@ contains
     deallocate(start,length,pe_loc)
 
     lsize = mct_gsmap_lsize(gsmap_i,mpicom_i)
-    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(seq_flds_dom_coord), &
-       OtherChars=trim(seq_flds_dom_other), lsize=lsize )
+    call mct_gGrid_init(GGrid=dom_i, CoordChars='lat:lon:hgt', OtherChars='area:aream:mask:frac', lsize=lsize )
     call mct_aVect_zero(dom_i%data)
 
     ! Determine global gridpoint number attribute, GlobGridNum, which is set automatically by MCT
