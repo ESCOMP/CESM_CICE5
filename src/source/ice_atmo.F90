@@ -377,7 +377,7 @@
       !------------------------------------------------------------
       ! iterate to converge on Z/L, ustar, tstar and qstar
       !------------------------------------------------------------
-      ustar_prev = 2.0_SHR_KIND_R8 * ustar
+      ustar_prev = 2.0_dbl_kind * ustar
       do iter =1,flux_convergence_max_iteration
          do ij = 1, icells
             i = indxi(ij)
