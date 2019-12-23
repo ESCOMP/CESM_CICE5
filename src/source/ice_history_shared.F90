@@ -115,7 +115,7 @@
          nvarz = 4              , & ! number of category/vertical grid fields written
          ncat_hist = ncat           ! number of ice categories written <= ncat
 
-      real (kind=real_kind), public :: time_beg(max_nstrm), & ! bounds for averaging
+      real (kind=dbl_kind), public :: time_beg(max_nstrm), & ! bounds for averaging
                                        time_end(max_nstrm), &
                                        time_bounds(2)
 
