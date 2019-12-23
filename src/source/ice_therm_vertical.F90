@@ -2387,7 +2387,7 @@
                - fsnow(i,j)*Lfresh - fadvocn(i,j)) * dt
          ferr = abs(efinal(ij)-einit(ij)-einp) / dt
 
-         if (ferr > ferrmax) then
+         if (ferr > 1.1_dbl_kind*ferrmax) then
             l_stop = .true.
             istop = i
             jstop = j
