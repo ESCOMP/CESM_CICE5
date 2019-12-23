@@ -76,7 +76,7 @@
       integer (kind=int_kind), dimension(5) :: dimidcz
       integer (kind=int_kind), dimension(3) :: dimid_nverts
       integer (kind=int_kind), dimension(4) :: dimidex
-      real (kind=real_kind) :: ltime
+      real (kind=dbl_kind) :: ltime
       character (char_len) :: title
       character (char_len) :: time_period_freq
       character (char_len_long) :: ncfile(max_nstrm)
@@ -169,8 +169,8 @@
       call ice_pio_initdecomp(ndim3=nzilyr,  ndim4=ncat_hist,  iodesc=iodesc4di, ice_precision=history_precision)
       call ice_pio_initdecomp(ndim3=nzslyr,  ndim4=ncat_hist,  iodesc=iodesc4ds, ice_precision=history_precision)
 
-!      ltime = time/int(secday)
-      ltime = real(time/int(secday),kind=real_kind)
+      ltime = time/int(secday)
+!      ltime = real(time/int(secday),kind=real_kind)
 
       !-----------------------------------------------------------------
       ! define dimensions
@@ -193,7 +193,7 @@
       ! define coordinate variables:  time, time_bounds
       !-----------------------------------------------------------------
 
-        status = pio_def_var(File,'time',history_precision,(/timid/),varid)
+        status = pio_def_var(File,'time',pio_double,(/timid/),varid)
         status = pio_put_att(File,varid,'long_name','model time')
 
         write(cdate,'(i8.8)') idate0
@@ -219,7 +219,7 @@
         if (hist_avg .and. histfreq(ns) /= '1') then
           dimid2(1) = boundid
           dimid2(2) = timid
-          status = pio_def_var(File,'time_bounds',history_precision,dimid2,varid)
+          status = pio_def_var(File,'time_bounds',pio_double,dimid2,varid)
           status = pio_put_att(File,varid,'long_name', &
                                 'boundaries for time-averaging interval')
           write(cdate,'(i8.8)') idate0
