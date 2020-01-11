@@ -5,54 +5,54 @@ module ice_comp_nuopc
   !----------------------------------------------------------------------------
 
   use ESMF
-  use NUOPC              , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
-  use NUOPC              , only : NUOPC_CompFilterPhaseMap, NUOPC_IsUpdated, NUOPC_IsAtTime
-  use NUOPC              , only : NUOPC_CompAttributeGet, NUOPC_Advertise
-  use NUOPC              , only : NUOPC_SetAttribute, NUOPC_CompAttributeGet, NUOPC_CompAttributeSet
-  use NUOPC_Model        , only : model_routine_SS           => SetServices
-  use NUOPC_Model        , only : model_label_Advance        => label_Advance
-  use NUOPC_Model        , only : model_label_DataInitialize => label_DataInitialize
-  use NUOPC_Model        , only : model_label_SetRunClock    => label_SetRunClock
-  use NUOPC_Model        , only : model_label_Finalize       => label_Finalize
-  use NUOPC_Model        , only : NUOPC_ModelGet, SetVM
-  use shr_kind_mod       , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
-  use shr_sys_mod        , only : shr_sys_abort, shr_sys_flush
-  use shr_file_mod       , only : shr_file_getlogunit, shr_file_setlogunit
-  use shr_string_mod     , only : shr_string_listGetNum
-  use shr_orb_mod        , only : shr_orb_decl
-  use shr_const_mod      , only : shr_const_pi
-  use shr_cal_mod        , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
-  use ice_shr_methods    , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
-  use ice_shr_methods    , only : set_component_logging, get_component_instance
-  use ice_shr_methods    , only : state_flddebug
-  use ice_import_export  , only : ice_import, ice_export
-  use ice_import_export  , only : ice_advertise_fields, ice_realize_fields
-  use ice_domain_size    , only : nx_global, ny_global
-  use ice_domain         , only : nblocks, blocks_ice, distrb_info
-  use ice_blocks         , only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
-  use ice_blocks         , only : nblocks_tot, get_block_parameter
-  use ice_distribution   , only : ice_distributiongetblockloc
-  use ice_grid           , only : tlon, tlat, hm, tarea, ULON, ULAT
-  use ice_constants      , only : rad_to_deg
-  use ice_communicate    , only : my_task, master_task, mpi_comm_ice
-  use ice_calendar       , only : force_restart_now, write_ic
-  use ice_calendar       , only : idate, mday, time, month, daycal, time2sec, year_init
-  use ice_calendar       , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
-  use ice_orbital        , only : eccen, obliqr, lambm0, mvelpp
-  use ice_kinds_mod      , only : dbl_kind, int_kind
-  use ice_scam           , only : scmlat, scmlon, single_column
-  use ice_fileunits      , only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
-  use ice_ocean          , only : tfrz_option
-  use ice_therm_shared   , only : ktherm
-  use ice_restart_shared , only : runid, runtype, restart_dir, restart_file
-  use ice_history        , only : accum_hist
-  use ice_history_shared , only : model_doi_url  ! TODO: add this functionality
-  use ice_prescribed_mod , only : ice_prescribed_init
-  use ice_atmo           , only : flux_convergence_tolerance, flux_convergence_max_iteration
-  use ice_atmo           , only : use_coldair_outbreak_mod
-  use CICE_InitMod       , only : CICE_Init
-  use CICE_RunMod        , only : CICE_Run
-  use perf_mod           , only : t_startf, t_stopf, t_barrierf
+  use NUOPC                  , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
+  use NUOPC                  , only : NUOPC_CompFilterPhaseMap, NUOPC_IsUpdated, NUOPC_IsAtTime
+  use NUOPC                  , only : NUOPC_CompAttributeGet, NUOPC_Advertise
+  use NUOPC                  , only : NUOPC_SetAttribute, NUOPC_CompAttributeGet, NUOPC_CompAttributeSet
+  use NUOPC_Model            , only : model_routine_SS           => SetServices
+  use NUOPC_Model            , only : model_label_Advance        => label_Advance
+  use NUOPC_Model            , only : model_label_DataInitialize => label_DataInitialize
+  use NUOPC_Model            , only : model_label_SetRunClock    => label_SetRunClock
+  use NUOPC_Model            , only : model_label_Finalize       => label_Finalize
+  use NUOPC_Model            , only : NUOPC_ModelGet, SetVM
+  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
+  use shr_sys_mod            , only : shr_sys_abort, shr_sys_flush
+  use shr_file_mod           , only : shr_file_getlogunit, shr_file_setlogunit
+  use shr_string_mod         , only : shr_string_listGetNum
+  use shr_orb_mod            , only : shr_orb_decl, shr_orb_params, SHR_ORB_UNDEF_REAL, SHR_ORB_UNDEF_INT
+  use shr_const_mod          , only : shr_const_pi
+  use shr_cal_mod            , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
+  use ice_shr_methods        , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
+  use ice_shr_methods        , only : set_component_logging, get_component_instance
+  use ice_shr_methods        , only : state_flddebug
+  use ice_import_export      , only : ice_import, ice_export
+  use ice_import_export      , only : ice_advertise_fields, ice_realize_fields
+  use ice_domain_size        , only : nx_global, ny_global
+  use ice_domain             , only : nblocks, blocks_ice, distrb_info
+  use ice_blocks             , only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
+  use ice_blocks             , only : nblocks_tot, get_block_parameter
+  use ice_distribution       , only : ice_distributiongetblockloc
+  use ice_grid               , only : tlon, tlat, hm, tarea, ULON, ULAT
+  use ice_constants          , only : rad_to_deg
+  use ice_communicate        , only : my_task, master_task, mpi_comm_ice
+  use ice_calendar           , only : force_restart_now, write_ic
+  use ice_calendar           , only : idate, mday, time, month, daycal, time2sec, year_init
+  use ice_calendar           , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
+  use ice_orbital            , only : eccen, obliqr, lambm0, mvelpp
+  use ice_kinds_mod          , only : dbl_kind, int_kind
+  use ice_scam               , only : scmlat, scmlon, single_column
+  use ice_fileunits          , only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
+  use ice_ocean              , only : tfrz_option
+  use ice_therm_shared       , only : ktherm
+  use ice_restart_shared     , only : runid, runtype, restart_dir, restart_file
+  use ice_history            , only : accum_hist
+  use ice_history_shared     , only : model_doi_url  ! TODO: add this functionality
+  use ice_prescribed_mod     , only : ice_prescribed_init
+  use ice_atmo               , only : flux_convergence_tolerance, flux_convergence_max_iteration
+  use ice_atmo               , only : use_coldair_outbreak_mod
+  use CICE_InitMod           , only : CICE_Init
+  use CICE_RunMod            , only : CICE_Run
+  use perf_mod               , only : t_startf, t_stopf, t_barrierf
   use ice_timers
 
   implicit none
@@ -66,6 +66,8 @@ module ice_comp_nuopc
   private :: ModelAdvance
   private :: ModelSetRunClock
   private :: ModelFinalize
+  private :: cice_orbital_init
+  private :: cice_orbital_update
 
   character(len=CL) :: flds_scalar_name = ''
   integer           :: flds_scalar_num = 0
@@ -79,6 +81,17 @@ module ice_comp_nuopc
   character(*), parameter :: modName =  "(ice_comp_nuopc)"
   character(*), parameter :: u_FILE_u = &
        __FILE__
+
+  character(len=CL)      :: orb_mode        ! attribute - orbital mode
+  integer                :: orb_iyear       ! attribute - orbital year
+  integer                :: orb_iyear_align ! attribute - associated with model year
+  real(R8)               :: orb_obliq       ! attribute - obliquity in degrees
+  real(R8)               :: orb_mvelp       ! attribute - moving vernal equinox longitude
+  real(R8)               :: orb_eccen       ! attribute and update-  orbital eccentricity
+
+  character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
+  character(len=*) , parameter :: orb_variable_year    = 'variable_year'
+  character(len=*) , parameter :: orb_fixed_parameters = 'fixed_parameters'
 
 !=======================================================================
 contains
@@ -332,32 +345,21 @@ contains
     call t_startf ('cice_init_total')
 
     !----------------------------------------------------------------------------
-    ! Determine attributes - also needed in realize phase to get grid information
+    ! Get orbital values
     !----------------------------------------------------------------------------
 
-    ! Get orbital values
     ! Note that these values are obtained in a call to init_orbit in ice_shortwave.F90
     ! if CESMCOUPLED is not defined
-    call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, isPresent=isPresent, rc=rc)
+
+    call cice_orbital_init(gcomp, nu_diag, my_task==master_task, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) eccen
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, isPresent=isPresent, rc=rc)
+
+    call cice_orbital_update(clock, nu_diag, my_task==master_task, eccen, obliqr, lambm0, mvelpp, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) obliqr
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) lambm0
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) mvelpp
-    end if
+
+    !----------------------------------------------------------------------------
+    ! Determine attributes - also needed in realize phase to get grid information
+    !----------------------------------------------------------------------------
 
     ! Determine runtype and possibly nextsw_cday
     call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, isPresent=isPresent, rc=rc)
@@ -910,7 +912,6 @@ contains
     integer                    :: tod_sync   ! Sync current time of day (sec)
     character(CL)              :: restart_date
     character(CL)              :: restart_filename
-    logical                    :: isPresent
     character(*)   , parameter :: F00   = "('(ice_comp_nuopc) ',2a,i8,d21.14)"
     character(len=*),parameter  :: subname=trim(modName)//':(ModelAdvance) '
     !--------------------------------
@@ -955,26 +956,9 @@ contains
     !--------------------------------
     ! Obtain orbital values
     !--------------------------------
-    call NUOPC_CompAttributeGet(gcomp, name='orb_eccen', value=cvalue, isPresent=isPresent, rc=rc)
+
+    call cice_orbital_update(clock, nu_diag, my_task==master_task, eccen, obliqr, lambm0, mvelpp, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) eccen
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='orb_obliqr', value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) obliqr
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='orb_lambm0', value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) lambm0
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='orb_mvelpp', value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) mvelpp
-    end if
 
     !--------------------------------
     ! check that cice internal time is in sync with master clock before timestep update
@@ -1273,5 +1257,165 @@ contains
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
   end subroutine ModelFinalize
+
+  !===============================================================================
+
+  subroutine cice_orbital_init(gcomp, logunit, mastertask, rc)
+
+    !----------------------------------------------------------
+    ! Initialize orbital related values
+    !----------------------------------------------------------
+
+    ! input/output variables
+    type(ESMF_GridComp)                 :: gcomp
+    integer             , intent(in)    :: logunit
+    logical             , intent(in)    :: mastertask 
+    integer             , intent(out)   :: rc              ! output error
+
+    ! local variables
+    character(len=CL) :: msgstr          ! temporary
+    character(len=CL) :: cvalue          ! temporary
+    character(len=*) , parameter :: subname = "(cice_orbital_init)"
+    !-------------------------------------------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    ! Determine orbital attributes from input
+    call NUOPC_CompAttributeGet(gcomp, name="orb_mode", value=cvalue, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) orb_mode
+
+    call NUOPC_CompAttributeGet(gcomp, name="orb_iyear", value=cvalue, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) orb_iyear
+
+    call NUOPC_CompAttributeGet(gcomp, name="orb_iyear_align", value=cvalue, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) orb_iyear_align
+
+    call NUOPC_CompAttributeGet(gcomp, name="orb_obliq", value=cvalue, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) orb_obliq
+
+    call NUOPC_CompAttributeGet(gcomp, name="orb_eccen", value=cvalue, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) orb_eccen
+
+    call NUOPC_CompAttributeGet(gcomp, name="orb_mvelp", value=cvalue, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) orb_mvelp
+
+    write(6,*)'DEBUG: orb_mode  = ',orb_mode
+    write(6,*)'DEBUG: orb_iyear = ',orb_iyear
+
+    ! Error checks
+    if (trim(orb_mode) == trim(orb_fixed_year)) then
+       orb_obliq = SHR_ORB_UNDEF_REAL
+       orb_eccen = SHR_ORB_UNDEF_REAL
+       orb_mvelp = SHR_ORB_UNDEF_REAL
+       if (orb_iyear == SHR_ORB_UNDEF_INT) then
+          if (mastertask) then
+             write(logunit,*) trim(subname),' ERROR: invalid settings orb_mode =',trim(orb_mode)
+             write(logunit,*) trim(subname),' ERROR: fixed_year settings = ',orb_iyear
+             write (msgstr, *) ' ERROR: invalid settings for orb_mode '//trim(orb_mode)
+          end if
+          call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
+          return  ! bail out
+       endif
+    elseif (trim(orb_mode) == trim(orb_variable_year)) then
+       orb_obliq = SHR_ORB_UNDEF_REAL
+       orb_eccen = SHR_ORB_UNDEF_REAL
+       orb_mvelp = SHR_ORB_UNDEF_REAL
+       if (orb_iyear == SHR_ORB_UNDEF_INT .or. orb_iyear_align == SHR_ORB_UNDEF_INT) then
+          if (mastertask) then
+             write(logunit,*) trim(subname),' ERROR: invalid settings orb_mode =',trim(orb_mode)
+             write(logunit,*) trim(subname),' ERROR: variable_year settings = ',orb_iyear, orb_iyear_align
+             write (msgstr, *) subname//' ERROR: invalid settings for orb_mode '//trim(orb_mode)
+          end if
+          call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
+          return  ! bail out
+       endif
+    elseif (trim(orb_mode) == trim(orb_fixed_parameters)) then
+       !-- force orb_iyear to undef to make sure shr_orb_params works properly
+       orb_iyear = SHR_ORB_UNDEF_INT
+       orb_iyear_align = SHR_ORB_UNDEF_INT
+       if (orb_eccen == SHR_ORB_UNDEF_REAL .or. &
+           orb_obliq == SHR_ORB_UNDEF_REAL .or. &
+           orb_mvelp == SHR_ORB_UNDEF_REAL) then
+          if (mastertask) then
+             write(logunit,*) trim(subname),' ERROR: invalid settings orb_mode =',trim(orb_mode)
+             write(logunit,*) trim(subname),' ERROR: orb_eccen = ',orb_eccen
+             write(logunit,*) trim(subname),' ERROR: orb_obliq = ',orb_obliq
+             write(logunit,*) trim(subname),' ERROR: orb_mvelp = ',orb_mvelp
+             write (msgstr, *) subname//' ERROR: invalid settings for orb_mode '//trim(orb_mode)
+          end if
+          call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
+          return  ! bail out
+       endif
+    else
+       write (msgstr, *) subname//' ERROR: invalid orb_mode '//trim(orb_mode)
+       call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
+       rc = ESMF_FAILURE
+       return  ! bail out
+    endif
+
+  end subroutine cice_orbital_init
+
+  !===============================================================================
+
+  subroutine cice_orbital_update(clock, logunit,  mastertask, eccen, obliqr, lambm0, mvelpp, rc)
+
+    !----------------------------------------------------------
+    ! Update orbital settings 
+    !----------------------------------------------------------
+
+    ! input/output variables
+    type(ESMF_Clock) , intent(in)    :: clock
+    integer          , intent(in)    :: logunit 
+    logical          , intent(in)    :: mastertask
+    real(R8)         , intent(inout) :: eccen  ! orbital eccentricity
+    real(R8)         , intent(inout) :: obliqr ! Earths obliquity in rad
+    real(R8)         , intent(inout) :: lambm0 ! Mean long of perihelion at vernal equinox (radians)
+    real(R8)         , intent(inout) :: mvelpp ! moving vernal equinox longitude of perihelion plus pi (radians)
+    integer          , intent(out)   :: rc     ! output error
+
+    ! local variables
+    type(ESMF_Time)   :: CurrTime ! current time
+    integer           :: year     ! model year at current time 
+    integer           :: orb_year ! orbital year for current orbital computation
+    character(len=CL) :: msgstr   ! temporary
+    logical           :: lprint
+    logical           :: first_time = .true.
+    character(len=*) , parameter :: subname = "(cice_orbital_update)"
+    !-------------------------------------------
+
+    if (trim(orb_mode) == trim(orb_variable_year)) then
+       call ESMF_ClockGet(clock, CurrTime=CurrTime, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeGet(CurrTime, yy=year, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       orb_year = orb_iyear + (year - orb_iyear_align)
+       lprint = mastertask
+    else
+       orb_year = orb_iyear 
+       if (first_time) then
+          lprint = mastertask
+          first_time = .false.
+       else
+          lprint = .false.
+       end if
+    end if
+
+    eccen = orb_eccen
+    call shr_orb_params(orb_year, eccen, orb_obliq, orb_mvelp, obliqr, lambm0, mvelpp, lprint)
+
+    if ( eccen  == SHR_ORB_UNDEF_REAL .or. obliqr == SHR_ORB_UNDEF_REAL .or. &
+         mvelpp == SHR_ORB_UNDEF_REAL .or. lambm0 == SHR_ORB_UNDEF_REAL) then
+       write (msgstr, *) subname//' ERROR: orb params incorrect'
+       call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
+       return  ! bail out
+    endif
+
+  end subroutine cice_orbital_update
 
 end module ice_comp_nuopc
