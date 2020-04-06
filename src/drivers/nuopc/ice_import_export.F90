@@ -1443,10 +1443,6 @@ contains
 
     if (geomtype == ESMF_GEOMTYPE_MESH) then
 
-       if (present(ungridded_index)) then
-          write(6,*)'DEBUG: fldname = ',trim(fldname),' has ungridded index= ',ungridded_index
-       end if
-
        ! get field pointer
        if (present(ungridded_index)) then
           call state_getfldptr(state, trim(fldname), dataPtr2d, rc)
