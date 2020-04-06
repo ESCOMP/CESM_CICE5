@@ -1305,9 +1305,6 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) orb_mvelp
 
-    write(6,*)'DEBUG: orb_mode  = ',orb_mode
-    write(6,*)'DEBUG: orb_iyear = ',orb_iyear
-
     ! Error checks
     if (trim(orb_mode) == trim(orb_fixed_year)) then
        orb_obliq = SHR_ORB_UNDEF_REAL
