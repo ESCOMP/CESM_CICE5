@@ -65,9 +65,9 @@
    character(*),parameter :: subName = '(ice_pio_wopen) '
    logical, save :: first_call = .true.
 
-   ice_pio_subsystem => shr_pio_getiosys(inst_name)
-   pio_iotype =  shr_pio_getiotype(inst_name)
-   pio_ioformat = shr_pio_getioformat(inst_name)
+   ice_pio_subsystem => shr_pio_getiosys('ICE')
+   pio_iotype =  shr_pio_getiotype('ICE')
+   pio_ioformat = shr_pio_getioformat('ICE')
 
    if (present(mode) .and. present(filename) .and. present(File)) then
 
