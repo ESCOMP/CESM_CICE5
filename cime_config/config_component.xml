@@ -5,9 +5,10 @@
 <entry_id version="3.0">
 
   <description>
-    <desc ice="CICE[%PRES][%CMIP6]">Sea ICE (cice) model version 5</desc>
+    <desc ice="CICE[%PRES][%CMIP6][%CICE4]">Sea ICE (cice) model version 5</desc>
     <desc option="PRES" > :prescribed cice</desc>
     <desc option="CMIP6"> :with modifications appropriate for CMIP6 experiments</desc>
+    <desc option="CICE4"> :running with cice4 physics</desc>
   </description>
 
   <entry id="COMP_ICE">
@@ -34,8 +35,9 @@
   <entry id="CICE_CONFIG_OPTS">
     <type>char</type>
     <default_value></default_value>
-    <values>
+    <values match="last">
       <value compset="_CICE[_%]"> -phys cice5 </value>
+      <value compset="_CICE%[^_]*CICE4"> -phys cice4 </value>
     </values>
     <group>build_component_cice</group>
     <file>env_build.xml</file>
