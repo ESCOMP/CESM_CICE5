@@ -180,7 +180,7 @@
     </values>
   </entry>
 
-  <entry id="atm2ice_fmap_is_pos_def" skip_default_entry="true">
+  <entry id="atm2ice_fmap_is_pos_def">
     <type>logical</type>
     <category>setup</category>
     <group>setup_nml</group>
@@ -190,10 +190,11 @@
     </desc>
     <values>
       <value>.true.</value>
+      <value fmaptype="patch">.false.</value>
     </values>
   </entry>
 
-  <entry id="atm2ice_smap_is_pos_def" skip_default_entry="true">
+  <entry id="atm2ice_smap_is_pos_def">
     <type>logical</type>
     <category>setup</category>
     <group>setup_nml</group>
@@ -203,6 +204,7 @@
     </desc>
     <values>
       <value>.true.</value>
+      <value smaptype="patch">.false.</value>
     </values>
   </entry>
 
