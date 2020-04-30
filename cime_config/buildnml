@@ -85,6 +85,12 @@ def _create_namelists(case, confdir, infile, nmlgen):
     if "DTRLVL=0" in case.get_value("CICE_CPPDEFS"):
         config['ntrlvl'] = "0"
 
+    if case.get_value("ATM2OCN_FMAPNAME").find('patc') != -1:
+        config['fmaptype'] = 'patch'
+
+    if case.get_value("ATM2OCN_SMAPNAME").find('patc') != -1:
+        config['smaptype'] = 'patch'
+
     # Note - xml ICE_NCAT, CICE_DECOMPSETTING, CICE_DECOMPTYPE are used
     # in setting the cice namelist and are set in buildlib:
 
