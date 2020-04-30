@@ -23,6 +23,7 @@
                      ! 'default'  => latitude and sst dependent
                      ! 'none'     => no ice
                      ! note:  restart = .true. overwrites
+      logical :: atm2ice_fmap_is_pos_def, atm2ice_smap_is_pos_def
 
 !=======================================================================
 
@@ -124,7 +125,8 @@
         print_global,   print_points,   latpnt,          lonpnt,        &
         dbug,           histfreq,       histfreq_n,      hist_avg,      &
         history_dir,    history_file,                                   &
-        write_ic,       incond_dir,     incond_file, history_precision
+        write_ic,       incond_dir,     incond_file, history_precision, &
+        atm2ice_fmap_is_pos_def, atm2ice_smap_is_pos_def
 
       namelist /grid_nml/ &
         grid_format,    grid_type,       grid_file,     kmt_file,       &
@@ -216,6 +218,8 @@
       lcdf64       = .false. ! 64 bit offset for netCDF
       history_precision = 4    ! write history files in single precision
       ice_ic       = 'default'      ! latitude and sst-dependent
+      atm2ice_fmap_is_pos_def = .true.
+      atm2ice_smap_is_pos_def = .true.
       grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
       grid_type    = 'rectangular'  ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
@@ -714,6 +718,8 @@
       call broadcast_scalar(lcdf64,             master_task)
       call broadcast_scalar(pointer_file,       master_task)
       call broadcast_scalar(ice_ic,             master_task)
+      call broadcast_scalar(atm2ice_fmap_is_pos_def,  master_task)
+      call broadcast_scalar(atm2ice_smap_is_pos_def,  master_task)
       call broadcast_scalar(grid_format,        master_task)
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
@@ -887,6 +893,10 @@
          write(nu_diag,*)    ' use_restart_time          = ', use_restart_time
          write(nu_diag,*)    ' ice_ic                    = ', &
                                trim(ice_ic)
+         write(nu_diag,*)    ' atm2ice_fmap_is_pos_def   = ', &
+                               atm2ice_fmap_is_pos_def
+         write(nu_diag,*)    ' atm2ice_smap_is_pos_def   = ', &
+                               atm2ice_smap_is_pos_def
          write(nu_diag,*)    ' grid_type                 = ', &
                                trim(grid_type)
          if (trim(grid_type) /= 'rectangular' .or. &

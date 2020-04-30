@@ -121,6 +121,16 @@ def _create_namelists(case, confdir, infile, nmlgen):
         if nmlgen.get_value('ice_ic') == 'UNSET':
             nmlgen.set_value('ice_ic', value="default")
 
+    # patch maps are not positive definite, aavg and blin are
+    if case.get_value("ATM2OCN_FMAPNAME").find('patc') == -1:
+      nmlgen.add_default("atm2ice_fmap_is_pos_def", value=".true.")
+    else:
+      nmlgen.add_default("atm2ice_fmap_is_pos_def", value=".false.")
+    if case.get_value("ATM2OCN_SMAPNAME").find('patc') == -1:
+      nmlgen.add_default("atm2ice_smap_is_pos_def", value=".true.")
+    else:
+      nmlgen.add_default("atm2ice_smap_is_pos_def", value=".false.")
+
     # error checks for prescribed ice mode
     if cice_mode == 'prescribed':
         sstice_grid_filename = case.get_value('SSTICE_GRID_FILENAME')

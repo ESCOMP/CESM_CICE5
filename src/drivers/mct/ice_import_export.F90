@@ -21,6 +21,7 @@ module ice_import_export
   use ice_flux        , only: fiso_atm, fiso_ocn, fiso_rain, fiso_evap, &
                               Qa_iso, Qref_iso, HDO_ocn, H2_18O_ocn, H2_16O_ocn
   use ice_flux        , only: send_i2x_per_cat, fswthrun_ai
+  use ice_init        , only: atm2ice_fmap_is_pos_def, atm2ice_smap_is_pos_def
   use ice_ocean       , only: tfrz_option
   use ice_atmo        , only: Cdn_atm
   use ice_state       , only: vice, vsno, aice, aicen_init, trcr
@@ -154,6 +155,19 @@ contains
        enddo    !j
     enddo        !iblk
     !$OMP END PARALLEL DO
+
+    if (.not. atm2ice_smap_is_pos_def) then
+      Qa   = max(Qa  , c0)
+      rhoa = max(rhoa, c0)
+    end if
+    if (.not. atm2ice_fmap_is_pos_def) then
+      swvdr = max(swvdr, c0)
+      swidr = max(swidr, c0)
+      swvdf = max(swvdf, c0)
+      swidf = max(swidf, c0)
+      frain = max(frain, c0)
+      fsnow = max(fsnow, c0)
+    end if
 
     if (rasm_snowrain_split) then
        !$OMP PARALLEL DO PRIVATE(iblk,i,j)

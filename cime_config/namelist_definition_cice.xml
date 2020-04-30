@@ -180,6 +180,32 @@
     </values>
   </entry>
 
+  <entry id="atm2ice_fmap_is_pos_def" skip_default_entry="true">
+    <type>logical</type>
+    <category>setup</category>
+    <group>setup_nml</group>
+    <desc>
+      Is atm2ice_fmap positive definite? If not, need to account for possible
+      negative values in ice_import_export.F90
+    </desc>
+    <values>
+      <value>.true.</value>
+    </values>
+  </entry>
+
+  <entry id="atm2ice_smap_is_pos_def" skip_default_entry="true">
+    <type>logical</type>
+    <category>setup</category>
+    <group>setup_nml</group>
+    <desc>
+      Is atm2ice_smap positive definite? If not, need to account for possible
+      negative values in ice_import_export.F90
+    </desc>
+    <values>
+      <value>.true.</value>
+    </values>
+  </entry>
+
   <!-- <entry id="runtype" modify_via_xml="RUN_TYPE"> -->
   <!--   <type>char</type> -->
   <!--   <category>setup</category> -->
