@@ -37,20 +37,8 @@ module ice_prescribed_mod
   logical(kind=log_kind), public :: prescribed_ice      ! true if prescribed ice
 
   ! private data members:
-  type(shr_strdata_type)         :: sdat                ! prescribed data stream
-  real(kind=dbl_kind)            :: ice_cov(nx_block,ny_block,max_blocks) ! ice cover
-
-  ! private parameters:
-  ! note: heat capacity of sea ice, rhoi*C=rcpi+rLfidepressT*salinity/T^2
-  real (kind=dbl_kind), parameter :: cp_sno = 0.0_dbl_kind        ! specific heat of snow         (J/kg/K)
-  real (kind=dbl_kind), parameter :: rLfi = Lfresh*rhoi           ! latent heat of fusion ice     (J/m^3)
-  real (kind=dbl_kind), parameter :: rLfs = Lfresh*rhos           ! latent heat of fusion snow    (J/m^3)
-  real (kind=dbl_kind), parameter :: rLvi = Lvap*rhoi             ! latent heat of vapor*rhoice   (J/m^3)
-  real (kind=dbl_kind), parameter :: rLvs = Lvap*rhos             ! latent heat of vapor*rhosno   (J/m^3)
-  real (kind=dbl_kind), parameter :: rcpi = cp_ice*rhoi           ! heat capacity of fresh ice    (J/m^3)
-  real (kind=dbl_kind), parameter :: rcps = cp_sno*rhos           ! heat capacity of snow         (J/m^3)
-  real (kind=dbl_kind), parameter :: rcpidepressT = rcpi*depressT ! param for finding T(z) from q (J/m^3)
-  real (kind=dbl_kind), parameter :: rLfidepressT = rLfi*depressT ! param for heat capacity       (J deg/m^3)
+  type(shr_strdata_type) :: sdat                ! prescribed data stream
+  real(kind=dbl_kind)    :: ice_cov(nx_block,ny_block,max_blocks) ! ice cover
 
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -91,8 +79,8 @@ contains
 
     namelist /ice_prescribed_nuopc_nml/ &
          prescribed_ice_mode,           &
-         stream_varname ,               &
          stream_meshfile,               &
+         stream_varname ,               &
          stream_datafiles,              &
          stream_yearalign,              &
          stream_yearfirst ,             &
@@ -113,25 +101,23 @@ contains
     if (my_task == master_task) then
        open (newunit=nu_nml, file=nml_filename, status='old',iostat=nml_error)
        call shr_nl_find_group_name(nu_nml, 'ice_prescribed_nuopc_nml', status=nml_error)
-       if (nml_error == 0) then
-          read(nu_nml, ice_prescribed_nuopc_nml, iostat=nml_error)
-          if (nml_error > 0) then
-             write(nu_diag,F00) "ERROR: problem on read of ice_prescribed namelist in ice_prescribed_mod"
-             call abort_ice(subName)
-          endif
+       if (nml_error /= 0) then
+          write(nu_diag,F00) "ERROR: problem on read of ice_prescribed_nuopc_nml namelist"
+          call abort_ice(subName)
        endif
+       read(nu_nml, ice_prescribed_nuopc_nml, iostat=nml_error)
        close(nu_nml)
     end if
-
-    ! --------------------------------------------------
-    ! only do the following if prescribed ice mode is on
-    ! --------------------------------------------------
 
     ! broadcast namelist input
     call broadcast_scalar(prescribed_ice_mode, master_task)
 
-    ! set module variable
+    ! set module variable 'prescribed_ice'
     prescribed_ice = prescribed_ice_mode
+
+    ! --------------------------------------------------
+    ! only do the following if prescribed ice mode is on
+    ! --------------------------------------------------
 
     if (prescribed_ice_mode) then
 
@@ -140,7 +126,8 @@ contains
        call broadcast_scalar(stream_yearlast  , master_task)
        call broadcast_scalar(stream_meshfile  , master_task)
        call broadcast_scalar(stream_varname   , master_task)
-       call mpi_bcast(stream_dataFiles, len(stream_datafiles(1))*NFilesMaximum, MPI_CHARACTER, 0, MPI_COMM_ICE, ierr)
+       call mpi_bcast(stream_dataFiles, len(stream_datafiles(1))*NFilesMaximum, &
+            MPI_CHARACTER, 0, MPI_COMM_ICE, ierr)
 
        nFile = 0
        do n = 1,nFilesMaximum
@@ -391,10 +378,10 @@ contains
                    trcrn(i,j,nt_sice:nt_sice+nilyr-1,:,iblk) = c0
                    trcrn(i,j,nt_qice:nt_qice+nilyr-1,:,iblk) = c0
                    trcrn(i,j,nt_qsno:nt_qsno+nslyr-1,:,iblk) = c0
-                end if          ! ice_cov >= eps04
-             end if             ! tmask
-          enddo                 ! i
-       enddo                 ! j
+                end if ! ice_cov >= eps04
+             end if    ! tmask
+          enddo        ! i
+       enddo           ! j
 
        !--------------------------------------------------------------------
        ! compute aggregate ice state and open water area
