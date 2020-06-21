@@ -66,6 +66,7 @@ contains
     character(len=char_len_long)     :: stream_meshFile
     character(len=char_len_long)     :: stream_dataFiles(nFilesMaximum)
     character(len=char_len_long)     :: stream_varname
+    character(len=char_len_long)     :: stream_mapalgo
     integer(kind=int_kind)           :: stream_yearfirst   ! first year in stream to use
     integer(kind=int_kind)           :: stream_yearlast    ! last year in stream to use
     integer(kind=int_kind)           :: stream_yearalign   ! align stream_year_first
@@ -82,6 +83,7 @@ contains
          stream_meshfile,               &
          stream_varname ,               &
          stream_datafiles,              &
+         stream_mapalgo,                &
          stream_yearalign,              &
          stream_yearfirst ,             &
          stream_yearlast                
@@ -96,6 +98,7 @@ contains
     stream_varname      = 'ice_cov'
     stream_meshfile     = ' '
     stream_datafiles(:) = ' '
+    stream_mapalgo      = 'bilinear'
 
     ! read namelist on master task
     if (my_task == master_task) then
@@ -125,9 +128,9 @@ contains
        call broadcast_scalar(stream_yearfirst , master_task)
        call broadcast_scalar(stream_yearlast  , master_task)
        call broadcast_scalar(stream_meshfile  , master_task)
+       call broadcast_scalar(stream_mapalgo   , master_task)
        call broadcast_scalar(stream_varname   , master_task)
-       call mpi_bcast(stream_dataFiles, len(stream_datafiles(1))*NFilesMaximum, &
-            MPI_CHARACTER, 0, MPI_COMM_ICE, ierr)
+       call mpi_bcast(stream_dataFiles, len(stream_datafiles(1))*NFilesMaximum, MPI_CHARACTER, 0, MPI_COMM_ICE, ierr)
 
        nFile = 0
        do n = 1,nFilesMaximum
@@ -137,11 +140,12 @@ contains
        if (my_task == master_task) then
           write(nu_diag,*) ' '
           write(nu_diag,F00) 'This is the prescribed ice coverage option.'
-          write(nu_diag,F01) '  stream_yearfirst   = ',stream_yearfirst
-          write(nu_diag,F01) '  stream_yearlast    = ',stream_yearlast
-          write(nu_diag,F01) '  stream_yearalign   = ',stream_yearalign
-          write(nu_diag,F00) '  stream_meshfile    = ',trim(stream_meshfile)
-          write(nu_diag,F00) '  stream_varname     = ',trim(stream_varname)
+          write(nu_diag,F01) '  stream_yearfirst = ',stream_yearfirst
+          write(nu_diag,F01) '  stream_yearlast  = ',stream_yearlast
+          write(nu_diag,F01) '  stream_yearalign = ',stream_yearalign
+          write(nu_diag,F00) '  stream_meshfile  = ',trim(stream_meshfile)
+          write(nu_diag,F00) '  stream_varname   = ',trim(stream_varname)
+          write(nu_diag,F00) '  stream_mapalgo   = ',trim(stream_mapalgo)
           do n = 1,nFile
              write(nu_diag,F00) '  stream_datafiles   = ',trim(stream_dataFiles(n))
           end do
@@ -149,21 +153,22 @@ contains
        endif
 
        ! initialize sdat
-       call shr_strdata_init_from_inline(sdat,       &
-            my_task             = my_task,           &
-            logunit             = nu_diag,           &
-            compid              = compid ,           &
-            model_clock         = clock ,            &
-            model_mesh          = mesh,              &
-            stream_meshfile     = stream_meshfile,   &
-            stream_filenames    = stream_datafiles(1:nfile),  &
-            stream_fldlistFile  = (/'ice_cov'/),     &
-            stream_fldListModel = (/'ice_cov'/),     &
-            stream_yearFirst    = stream_yearFirst,  &
-            stream_yearLast     = stream_yearLast,   &
-            stream_yearAlign    = stream_yearAlign , &
-            stream_offset       = 0,                 &
-            stream_taxmode      = 'cycle',           &
+       call shr_strdata_init_from_inline(sdat,               &
+            my_task             = my_task,                   &
+            logunit             = nu_diag,                   &
+            compid              = compid ,                   &
+            model_clock         = clock ,                    &
+            model_mesh          = mesh,                      &
+            stream_meshfile     = stream_meshfile,           &
+            stream_mapalgo      = trim(stream_mapalgo),      &
+            stream_filenames    = stream_datafiles(1:nfile), &
+            stream_fldlistFile  = (/'ice_cov'/),             &
+            stream_fldListModel = (/'ice_cov'/),             &
+            stream_yearFirst    = stream_yearFirst,          &
+            stream_yearLast     = stream_yearLast,           &
+            stream_yearAlign    = stream_yearAlign ,         &
+            stream_offset       = 0,                         &
+            stream_taxmode      = 'cycle',                   &
             rc                  = rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 

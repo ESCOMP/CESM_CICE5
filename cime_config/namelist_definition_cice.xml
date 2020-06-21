@@ -2155,16 +2155,17 @@
     </values>
   </entry>
 
-  <entry id="stream_datafiles" modify_via_xml="SSTICE_DATA_FILENAME">
+  <entry id="stream_mapalgo" >
     <type>char</type>
     <category>icepresc</category>
     <group>ice_prescribed_nuopc_nml</group>
     <desc>
-      file name containing sst/ifrac data
+      stream mesh to model mesh mapping type
     </desc>
+    <valid_values>na,redist,bilinear,</valid_values>
     <values>
-      <value>''</value>
-      <value cice_mode="prescribed">$SSTICE_DATA_FILENAME</value>
+      <value>na</value>
+      <value cice_mode="prescribed">bilinear</value>
     </values>
   </entry>
 
@@ -2177,6 +2178,19 @@
     </desc>
     <values>
       <value>ice_cov</value>
+    </values>
+  </entry>
+
+  <entry id="stream_datafiles" modify_via_xml="SSTICE_DATA_FILENAME">
+    <type>char</type>
+    <category>icepresc</category>
+    <group>ice_prescribed_nuopc_nml</group>
+    <desc>
+      file name(s) containing sst/ifrac data
+    </desc>
+    <values>
+      <value>''</value>
+      <value cice_mode="prescribed">$SSTICE_DATA_FILENAME</value>
     </values>
   </entry>
 
