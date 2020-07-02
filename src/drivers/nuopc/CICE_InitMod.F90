@@ -29,7 +29,7 @@
 !
 !  Initialize CICE model.
 
-      subroutine cice_init(mpicom_ice)
+      subroutine cice_init
 
       !  Initialize the basic state, grid and all necessary parameters for
       !  running the CICE model.  Return the initial state in routine
@@ -38,7 +38,6 @@
       use ice_aerosol          , only: faero_default
       use ice_algae            , only: get_forcing_bgc
       use ice_calendar         , only: dt, dt_dyn, write_ic, init_calendar, calendar, time
-      use ice_communicate      , only: init_communicate
       use ice_diagnostics      , only: init_diags
       use ice_domain           , only: init_domain_blocks
       use ice_dyn_eap          , only: init_eap
@@ -63,11 +62,8 @@
       use ice_zbgc             , only: init_zbgc
       use ice_zbgc_shared      , only: skl_bgc
 
-      ! !INPUT/OUTPUT PARAMETERS:
-      integer (kind=int_kind), optional, intent(in) :: mpicom_ice ! communicator for sequential ccsm
       !----------------------------------------------------
 
-      call init_communicate(mpicom_ice) ! initial setup for message passing
       call init_fileunits               ! unit numbers
       call input_data                   ! namelist variables
       if (trim(runid) == 'bering') then
