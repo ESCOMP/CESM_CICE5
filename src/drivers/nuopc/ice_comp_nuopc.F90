@@ -34,7 +34,7 @@ module ice_comp_nuopc
   use ice_distribution       , only : ice_distributiongetblockloc
   use ice_grid               , only : tlon, tlat, hm, tarea, ULON, ULAT
   use ice_constants          , only : rad_to_deg
-  use ice_communicate        , only : master_task, mpi_comm_ice
+  use ice_communicate        , only : init_communicate, my_task, master_task, mpi_comm_ice
   use ice_calendar           , only : force_restart_now, write_ic
   use ice_calendar           , only : idate, mday, time, month, daycal, time2sec, year_init
   use ice_calendar           , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
@@ -74,6 +74,7 @@ module ice_comp_nuopc
   integer           :: flds_scalar_index_nx = 0
   integer           :: flds_scalar_index_ny = 0
   integer           :: flds_scalar_index_nextsw_cday = 0
+  logical           :: mastertask
 
   integer     , parameter :: dbug = 10
   integer     , parameter :: debug_import = 0 ! internal debug level
@@ -329,6 +330,14 @@ contains
 
     call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    !----------------------------------------------------------------------------
+    ! Initialize cice communicators
+    !----------------------------------------------------------------------------
+
+    call init_communicate(lmpicom)     ! initial setup for message passing
+    mastertask = .false.
+    if (my_task == master_task) mastertask = .true.
 
     !----------------------------------------------------------------------------
     ! determine instance information
@@ -810,7 +819,6 @@ contains
          flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-#ifdef CESMCOUPLED
     !-----------------------------------------------------------------
     ! Prescribed ice initialization - first get compid
     !-----------------------------------------------------------------
@@ -821,7 +829,6 @@ contains
 
     ! Having this if-defd means that MCT does not need to be build in a NEMS configuration
     call ice_prescribed_init(lmpicom, compid, gindex_ice)
-#endif
 
     !-----------------------------------------------------------------
     ! Create cice export state
@@ -852,20 +859,6 @@ contains
        call State_diagnose(exportState,subname//':ES',rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     endif
-
-#ifdef USE_ESMF_METADATA
-    convCIM  = "CIM"
-    purpComp = "Model Component Simulation Description"
-    call ESMF_AttributeAdd(comp, convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ShortName", "CICE", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "LongName", "CICE Model", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "Description", "CICE5", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ReleaseDate", "TBD", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ModelType", "Sea Ice",  convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "Name", "David Bailey", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "EmailAddress", "dbailey@ucar.edu", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ResponsiblePartyRole", "contact", convention=convCIM, purpose=purpComp, rc=rc)
-#endif
 
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 

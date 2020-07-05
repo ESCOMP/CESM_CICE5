@@ -178,7 +178,7 @@ contains
     ! ice states
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'ice_mask'                )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'ice_fraction'            )
-    call fldlist_add(fldsFrIce_num, fldsFrIce, 'sea_ice_temperature'     )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'sea_ice_surface_temperature')
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_ice_volume'         )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_snow_volume'        )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Si_tref'                 )
@@ -793,7 +793,7 @@ contains
     ! ----
 
     ! surface temperature of ice covered portion (degK)
-    call state_setexport(exportState, 'sea_ice_temperature', input=Tsrf , lmask=tmask, ifrac=ailohi, rc=rc)
+    call state_setexport(exportState, 'sea_ice_surface_temperature', input=Tsrf , lmask=tmask, ifrac=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! albedo vis dir
