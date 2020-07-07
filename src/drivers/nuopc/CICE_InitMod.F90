@@ -29,7 +29,7 @@
 !
 !  Initialize CICE model.
 
-      subroutine cice_init(mpicom_ice)
+      subroutine cice_init
 
       !  Initialize the basic state, grid and all necessary parameters for
       !  running the CICE model.  Return the initial state in routine
@@ -62,8 +62,6 @@
       use ice_zbgc             , only: init_zbgc
       use ice_zbgc_shared      , only: skl_bgc
 
-      ! !INPUT/OUTPUT PARAMETERS:
-      integer (kind=int_kind), optional, intent(in) :: mpicom_ice ! communicator for sequential ccsm
       !----------------------------------------------------
 
       call init_fileunits               ! unit numbers

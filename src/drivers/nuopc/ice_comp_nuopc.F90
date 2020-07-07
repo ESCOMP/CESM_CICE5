@@ -504,6 +504,8 @@ contains
        call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
     end if
 
+    call init_communicate(lmpicom) ! initial setup for message passing
+
     !----------------------------------------------------------------------------
     ! Set cice logging
     !----------------------------------------------------------------------------
@@ -524,7 +526,7 @@ contains
     ! including master_task and my_task
 
     call t_startf ('cice_init')
-    call cice_init( lmpicom )
+    call cice_init
     call t_stopf ('cice_init')
 
     !----------------------------------------------------------------------------
