@@ -15,7 +15,7 @@ module ice_comp_nuopc
   use NUOPC_Model            , only : model_label_SetRunClock    => label_SetRunClock
   use NUOPC_Model            , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model            , only : NUOPC_ModelGet, SetVM
-  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs
+  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
   use shr_sys_mod            , only : shr_sys_abort, shr_sys_flush
   use shr_file_mod           , only : shr_file_getlogunit, shr_file_setlogunit
   use shr_string_mod         , only : shr_string_listGetNum
@@ -74,7 +74,6 @@ module ice_comp_nuopc
   integer           :: flds_scalar_index_nx = 0
   integer           :: flds_scalar_index_ny = 0
   integer           :: flds_scalar_index_nextsw_cday = 0
-  logical           :: mastertask
 
   integer     , parameter :: dbug = 10
   integer     , parameter :: debug_import = 0 ! internal debug level
@@ -89,7 +88,6 @@ module ice_comp_nuopc
   real(R8)               :: orb_obliq       ! attribute - obliquity in degrees
   real(R8)               :: orb_mvelp       ! attribute - moving vernal equinox longitude
   real(R8)               :: orb_eccen       ! attribute and update-  orbital eccentricity
-  logical                :: masterproc
 
   character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
   character(len=*) , parameter :: orb_variable_year    = 'variable_year'
@@ -335,9 +333,7 @@ contains
     ! Initialize cice communicators
     !----------------------------------------------------------------------------
 
-    call init_communicate(lmpicom)     ! initial setup for message passing
-    mastertask = .false.
-    if (my_task == master_task) mastertask = .true.
+    call init_communicate(lmpicom) ! initial setup for message passing
 
     !----------------------------------------------------------------------------
     ! determine instance information
@@ -357,13 +353,14 @@ contains
     !----------------------------------------------------------------------------
     ! Get orbital values
     !----------------------------------------------------------------------------
-    masterproc = localPet==master_task
+
     ! Note that these values are obtained in a call to init_orbit in ice_shortwave.F90
     ! if CESMCOUPLED is not defined
-    call cice_orbital_init(gcomp, nu_diag, masterproc, rc)
+
+    call cice_orbital_init(gcomp, nu_diag, my_task==master_task, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    call cice_orbital_update(clock, nu_diag, masterproc, eccen, obliqr, lambm0, mvelpp, rc)
+    call cice_orbital_update(clock, nu_diag, my_task==master_task, eccen, obliqr, lambm0, mvelpp, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
@@ -390,7 +387,7 @@ contains
        ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just the current time
 
        ! TOOD (mvertens, 2019-03-21): need to get the perpetual run working
-
+     
        if (trim(runtype) /= 'initial') then
           ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
           nextsw_cday = -1.0_r8
@@ -402,7 +399,7 @@ contains
        end if
     else
        ! This would be the NEMS branch
-       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is
+       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is 
        ! simply a CPP variable declaratino of NEMSCOUPLED
 
        runtype = 'initial' ! determined from the namelist in ice_init if CESMCOUPLED is not defined
@@ -504,8 +501,6 @@ contains
        call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
     end if
 
-    call init_communicate(lmpicom) ! initial setup for message passing
-
     !----------------------------------------------------------------------------
     ! Set cice logging
     !----------------------------------------------------------------------------
@@ -513,7 +508,7 @@ contains
     ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
     ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
 
-    call set_component_logging(gcomp, masterproc, nu_diag, shrlogunit, rc)
+    call set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call shr_file_setLogUnit (shrlogunit)
@@ -562,13 +557,13 @@ contains
 
     if (runtype == 'initial') then
        if (ref_ymd /= start_ymd .or. ref_tod /= start_tod) then
-          if (masterproc) then
+          if (my_task == master_task) then
              write(nu_diag,*) trim(subname),': ref_ymd ',ref_ymd, ' must equal start_ymd ',start_ymd
              write(nu_diag,*) trim(subname),': ref_ymd ',ref_tod, ' must equal start_ymd ',start_tod
           end if
        end if
 
-       if (masterproc) then
+       if (my_task == master_task) then
           write(nu_diag,*) trim(subname),' idate from sync clock = ', start_ymd
           write(nu_diag,*) trim(subname),'   tod from sync clock = ', start_tod
           write(nu_diag,*) trim(subname),' resetting idate to match sync clock'
@@ -576,7 +571,7 @@ contains
        idate = curr_ymd
 
        if (idate < 0) then
-          if (masterproc) then
+          if (my_task == master_task) then
              write(nu_diag,*) trim(subname),' ERROR curr_ymd,year_init =',curr_ymd,year_init
              write(nu_diag,*) trim(subname),' ERROR idate lt zero',idate
           end if
@@ -586,7 +581,7 @@ contains
        month = (idate-iyear*10000)/100           ! integer month of basedate
        mday  =  idate-iyear*10000-month*100      ! day of month of basedate
 
-       if (masterproc) then
+       if (my_task == master_task) then
           write(nu_diag,*) trim(subname),' curr_ymd = ',curr_ymd
           write(nu_diag,*) trim(subname),' cice year_init = ',year_init
           write(nu_diag,*) trim(subname),' cice start date = ',idate
@@ -752,7 +747,7 @@ contains
 
     EMeshTemp = ESMF_MeshCreate(filename=trim(cvalue), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (masterproc) then
+    if (my_task == master_task) then
        write(nu_diag,*)'mesh file for cice domain is ',trim(cvalue)
     end if
 
@@ -848,7 +843,7 @@ contains
 
     ! TODO (mvertens, 2018-12-21): fill in iceberg_prognostic as .false.
 
-    if (debug_export > 0 .and. masterproc) then
+    if (debug_export > 0 .and. my_task==master_task) then
        call State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
             idate, sec, nu_diag, rc=rc)
     end if
@@ -944,7 +939,7 @@ contains
          flds_scalar_name, flds_scalar_num, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    if (masterproc) then
+    if (my_task == master_task) then
        write(nu_diag,F00) trim(subname),' cice istep, nextsw_cday = ',istep, nextsw_cday
     end if
 
@@ -952,7 +947,7 @@ contains
     ! Obtain orbital values
     !--------------------------------
 
-    call cice_orbital_update(clock, nu_diag, masterproc, eccen, obliqr, lambm0, mvelpp, rc)
+    call cice_orbital_update(clock, nu_diag, my_task==master_task, eccen, obliqr, lambm0, mvelpp, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !--------------------------------
@@ -972,7 +967,7 @@ contains
 
     ! error check
     if ( (ymd /= ymd_sync) .or. (tod /= tod_sync) ) then
-       if (masterproc) then
+       if (my_task == master_task) then
           write(nu_diag,*)' cice ymd=',ymd     ,'  cice tod= ',tod
           write(nu_diag,*)' sync ymd=',ymd_sync,'  sync tod= ',tod_sync
        end if
@@ -1023,7 +1018,7 @@ contains
     call t_stopf ('cice_run_import')
 
     ! write Debug output
-    if (debug_import  > 0 .and. masterproc) then
+    if (debug_import  > 0 .and. my_task==master_task) then
        call State_fldDebug(importState, flds_scalar_name, 'cice_import:', &
             idate, sec, nu_diag, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1053,7 +1048,7 @@ contains
     call ice_timer_stop(timer_cplsend)
     call t_stopf ('cice_run_export')
 
-    if (debug_export > 0 .and. masterproc) then
+    if (debug_export > 0 .and. my_task==master_task) then
        call State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
             idate, sec, nu_diag, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1243,7 +1238,7 @@ contains
     rc = ESMF_SUCCESS
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
-    if (masterproc) then
+    if (my_task == master_task) then
        write(nu_diag,F91)
        write(nu_diag,F00) 'CICE: end of main integration loop'
        write(nu_diag,F91)
@@ -1264,7 +1259,7 @@ contains
     ! input/output variables
     type(ESMF_GridComp)                 :: gcomp
     integer             , intent(in)    :: logunit
-    logical             , intent(in)    :: mastertask
+    logical             , intent(in)    :: mastertask 
     integer             , intent(out)   :: rc              ! output error
 
     ! local variables
@@ -1358,12 +1353,12 @@ contains
   subroutine cice_orbital_update(clock, logunit,  mastertask, eccen, obliqr, lambm0, mvelpp, rc)
 
     !----------------------------------------------------------
-    ! Update orbital settings
+    ! Update orbital settings 
     !----------------------------------------------------------
 
     ! input/output variables
     type(ESMF_Clock) , intent(in)    :: clock
-    integer          , intent(in)    :: logunit
+    integer          , intent(in)    :: logunit 
     logical          , intent(in)    :: mastertask
     real(R8)         , intent(inout) :: eccen  ! orbital eccentricity
     real(R8)         , intent(inout) :: obliqr ! Earths obliquity in rad
@@ -1373,7 +1368,7 @@ contains
 
     ! local variables
     type(ESMF_Time)   :: CurrTime ! current time
-    integer           :: year     ! model year at current time
+    integer           :: year     ! model year at current time 
     integer           :: orb_year ! orbital year for current orbital computation
     character(len=CL) :: msgstr   ! temporary
     logical           :: lprint
@@ -1389,7 +1384,7 @@ contains
        orb_year = orb_iyear + (year - orb_iyear_align)
        lprint = mastertask
     else
-       orb_year = orb_iyear
+       orb_year = orb_iyear 
        if (first_time) then
           lprint = mastertask
           first_time = .false.
