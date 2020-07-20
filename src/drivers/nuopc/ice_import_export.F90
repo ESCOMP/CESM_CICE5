@@ -5,7 +5,7 @@ module ice_import_export
   use NUOPC_Model
   use shr_sys_mod        , only : shr_sys_abort, shr_sys_flush
   use shr_frz_mod        , only : shr_frz_freezetemp
-  use shr_kind_mod       , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
+  use shr_kind_mod       , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs
   use ice_kinds_mod      , only : int_kind, dbl_kind, char_len_long, log_kind
   use ice_constants      , only : c0, c1, tffresh, spval_dbl
   use ice_constants      , only : field_loc_center, field_type_scalar, field_type_vector
@@ -178,7 +178,7 @@ contains
     ! ice states
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'ice_mask'                )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'ice_fraction'            )
-    call fldlist_add(fldsFrIce_num, fldsFrIce, 'sea_ice_temperature'     )
+    call fldlist_add(fldsFrIce_num, fldsFrIce, 'sea_ice_surface_temperature')
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_ice_volume'         )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'mean_snow_volume'        )
     call fldlist_add(fldsFrIce_num, fldsFrIce, 'Si_tref'                 )
@@ -249,7 +249,7 @@ contains
     type(ESMF_Mesh) , optional , intent(in)  :: mesh
     type(ESMF_Grid) , optional , intent(in)  :: grid
     character(len=*)           , intent(in)  :: flds_scalar_name
-    integer                    , intent(in)  :: flds_scalar_num 
+    integer                    , intent(in)  :: flds_scalar_num
     integer                    , intent(out) :: rc
 
     ! local variables
@@ -793,7 +793,7 @@ contains
     ! ----
 
     ! surface temperature of ice covered portion (degK)
-    call state_setexport(exportState, 'sea_ice_temperature', input=Tsrf , lmask=tmask, ifrac=ailohi, rc=rc)
+    call state_setexport(exportState, 'sea_ice_surface_temperature', input=Tsrf , lmask=tmask, ifrac=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! albedo vis dir
@@ -1011,7 +1011,7 @@ contains
           ! penetrative shortwave by category
           ! Note: no need zero out pass-through fields over land for benefit of x2oacc fields in cpl hist files since
           ! the export state has been zeroed out at the beginning
-          call state_setexport(exportState, 'mean_sw_pen_to_ocn_ifrac_n', input=fswthrun_ai, index=n, &
+          call state_setexport(exportState, 'mean_sw_pen_to_ocn_ifrac_n', input=aicen_init, index=n, &
                lmask=tmask, ifrac=ailohi, ungridded_index=n, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end do

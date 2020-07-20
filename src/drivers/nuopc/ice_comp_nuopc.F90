@@ -32,7 +32,7 @@ module ice_comp_nuopc
   use ice_distribution       , only : ice_distributiongetblockloc
   use ice_grid               , only : tlon, tlat, hm, tarea, ULON, ULAT
   use ice_constants          , only : rad_to_deg
-  use ice_communicate        , only : my_task, master_task, mpi_comm_ice
+  use ice_communicate        , only : init_communicate, my_task, master_task, mpi_comm_ice
   use ice_calendar           , only : force_restart_now, write_ic
   use ice_calendar           , only : idate, mday, time, month, daycal, time2sec, year_init
   use ice_calendar           , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
@@ -328,6 +328,12 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------------------------------------------------
+    ! Initialize cice communicators
+    !----------------------------------------------------------------------------
+
+    call init_communicate(lmpicom) ! initial setup for message passing
+
+    !----------------------------------------------------------------------------
     ! determine instance information
     !----------------------------------------------------------------------------
 
@@ -513,7 +519,7 @@ contains
     ! including master_task and my_task
 
     call t_startf ('cice_init')
-    call cice_init( lmpicom )
+    call cice_init
     call t_stopf ('cice_init')
 
     !----------------------------------------------------------------------------
@@ -816,8 +822,8 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) compid  ! convert from string to integer
 
-    call ice_prescribed_init(compid, clock, mesh, rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! Having this if-defd means that MCT does not need to be build in a NEMS configuration
+    call ice_prescribed_init(lmpicom, compid, gindex_ice)
 
     !-----------------------------------------------------------------
     ! Create cice export state
