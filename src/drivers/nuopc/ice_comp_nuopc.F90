@@ -265,7 +265,6 @@ contains
     integer , allocatable   :: gindex(:)
     integer                 :: globalID
     character(CL)           :: cvalue
-    character(ESMF_MAXSTR)  :: convCIM, purpComp
     type(ESMF_VM)           :: vm
     type(ESMF_Time)         :: currTime           ! Current time
     type(ESMF_Time)         :: startTime          ! Start time
@@ -298,8 +297,6 @@ contains
     integer                 :: ig, jg             ! indices
     integer                 :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
     type(block)             :: this_block         ! block information for current block
-    integer                 :: compid             ! component id
-    character(len=CL)       :: tempc1,tempc2
     real(R8)                :: diff_lon
     integer                 :: npes
     integer                 :: num_elim_global
@@ -815,15 +812,11 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------
-    ! Prescribed ice initialization - first get compid
+    ! Prescribed ice initialization
     !-----------------------------------------------------------------
 
-    call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
+    call ice_prescribed_init(clock, mesh, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) compid  ! convert from string to integer
-
-    ! Having this if-defd means that MCT does not need to be build in a NEMS configuration
-    call ice_prescribed_init(lmpicom, compid, gindex_ice)
 
     !-----------------------------------------------------------------
     ! Create cice export state

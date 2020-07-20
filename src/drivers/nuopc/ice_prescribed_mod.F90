@@ -47,14 +47,13 @@ module ice_prescribed_mod
 contains
 !===============================================================================
 
-  subroutine ice_prescribed_init(compid, clock, mesh, rc)
+  subroutine ice_prescribed_init(clock, mesh, rc)
 
     ! Prescribed ice initialization
 
     include 'mpif.h'
 
     ! input/output parameters
-    integer(kind=int_kind) , intent(in)  :: compid
     type(ESMF_Clock)       , intent(in)  :: clock
     type(ESMF_Mesh)        , intent(in)  :: mesh
     integer                , intent(out) :: rc
@@ -156,8 +155,8 @@ contains
        call shr_strdata_init_from_inline(sdat,               &
             my_task             = my_task,                   &
             logunit             = nu_diag,                   &
-            compid              = compid ,                   &
-            model_clock         = clock ,                    &
+            compname            = 'ICE',                     &
+            model_clock         = clock,                     &
             model_mesh          = mesh,                      &
             stream_meshfile     = stream_meshfile,           &
             stream_mapalgo      = trim(stream_mapalgo),      &
