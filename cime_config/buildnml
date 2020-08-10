@@ -165,11 +165,10 @@ def _create_namelists(case, confdir, infile, nmlgen):
             'icefields_pond_nml',
             'icefields_nml']
 
-    if cice_mode == 'prescribed':
-        if case.get_value("COMP_INTERFACE") == 'nuopc':
-            groups.append('ice_prescribed_nuopc_nml')
-        else:
-            groups.append('ice_prescribed_nml')
+    if case.get_value("COMP_INTERFACE") == 'nuopc':
+        groups.append('ice_prescribed_nuopc_nml')
+    else:
+        groups.append('ice_prescribed_nml')
 
     namelist_file = os.path.join(confdir, "ice_in")
     nmlgen.write_output_file(namelist_file, data_list_path, groups=groups, sorted_groups=False)

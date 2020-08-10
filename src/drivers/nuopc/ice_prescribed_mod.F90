@@ -150,7 +150,7 @@ contains
           end do
           write(nu_diag,*) ' '
        endif
-
+       
        ! initialize sdat
        call shr_strdata_init_from_inline(sdat,               &
             my_task             = my_task,                   &
@@ -159,6 +159,7 @@ contains
             model_clock         = clock,                     &
             model_mesh          = mesh,                      &
             stream_meshfile     = stream_meshfile,           &
+            stream_lev_dimname  = 'null',                    & 
             stream_mapalgo      = trim(stream_mapalgo),      &
             stream_filenames    = stream_datafiles(1:nfile), &
             stream_fldlistFile  = (/'ice_cov'/),             &
@@ -168,6 +169,8 @@ contains
             stream_yearAlign    = stream_yearAlign ,         &
             stream_offset       = 0,                         &
             stream_taxmode      = 'cycle',                   &
+            stream_dtlimit      = 1.5_dbl_kind,              &
+            stream_tintalgo     = 'linear',                  &
             rc                  = rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
