@@ -16,11 +16,9 @@ module ice_comp_nuopc
   use NUOPC_Model            , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model            , only : NUOPC_ModelGet, SetVM
   use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
-  use shr_sys_mod            , only : shr_sys_abort, shr_sys_flush
+  use shr_sys_mod            , only : shr_sys_abort
   use shr_file_mod           , only : shr_file_getlogunit, shr_file_setlogunit
-  use shr_string_mod         , only : shr_string_listGetNum
   use shr_orb_mod            , only : shr_orb_decl, shr_orb_params, SHR_ORB_UNDEF_REAL, SHR_ORB_UNDEF_INT
-  use shr_const_mod          , only : shr_const_pi
   use shr_cal_mod            , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
   use ice_shr_methods        , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
   use ice_shr_methods        , only : set_component_logging, get_component_instance
@@ -34,8 +32,7 @@ module ice_comp_nuopc
   use ice_distribution       , only : ice_distributiongetblockloc
   use ice_grid               , only : tlon, tlat, hm, tarea, ULON, ULAT
   use ice_constants          , only : rad_to_deg
-  use ice_communicate        , only : my_task, master_task, mpi_comm_ice
-  use ice_communicate        , only : init_communicate
+  use ice_communicate        , only : init_communicate, my_task, master_task, mpi_comm_ice
   use ice_calendar           , only : force_restart_now, write_ic
   use ice_calendar           , only : idate, mday, time, month, daycal, time2sec, year_init
   use ice_calendar           , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
@@ -257,7 +254,7 @@ contains
 
     ! Local variables
     type(ESMF_DistGrid)     :: distGrid
-    type(ESMF_Mesh)         :: Emesh, EmeshTemp
+    type(ESMF_Mesh)         :: mesh, meshTemp
     integer                 :: spatialDim
     integer                 :: numOwnedElements
     real(R8), pointer       :: ownedElemCoords(:)
@@ -268,7 +265,6 @@ contains
     integer , allocatable   :: gindex(:)
     integer                 :: globalID
     character(CL)           :: cvalue
-    character(ESMF_MAXSTR)  :: convCIM, purpComp
     type(ESMF_VM)           :: vm
     type(ESMF_Time)         :: currTime           ! Current time
     type(ESMF_Time)         :: startTime          ! Start time
@@ -301,8 +297,6 @@ contains
     integer                 :: ig, jg             ! indices
     integer                 :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
     type(block)             :: this_block         ! block information for current block
-    integer                 :: compid             ! component id
-    character(len=CL)       :: tempc1,tempc2
     real(R8)                :: diff_lon
     integer                 :: npes
     integer                 :: num_elim_global
@@ -329,6 +323,12 @@ contains
 
     call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    !----------------------------------------------------------------------------
+    ! Initialize cice communicators
+    !----------------------------------------------------------------------------
+
+    call init_communicate(lmpicom) ! initial setup for message passing
 
     !----------------------------------------------------------------------------
     ! determine instance information
@@ -495,8 +495,6 @@ contains
     else
        call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
     end if
-
-    call init_communicate(lmpicom) ! initial setup for message passing
 
     !----------------------------------------------------------------------------
     ! Set cice logging
@@ -742,22 +740,22 @@ contains
     call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    EMeshTemp = ESMF_MeshCreate(filename=trim(cvalue), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
+    MeshTemp = ESMF_MeshCreate(filename=trim(cvalue), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     if (my_task == master_task) then
        write(nu_diag,*)'mesh file for cice domain is ',trim(cvalue)
     end if
 
     ! recreate the mesh using the above distGrid
-    EMesh = ESMF_MeshCreate(EMeshTemp, elementDistgrid=Distgrid, rc=rc)
+    Mesh = ESMF_MeshCreate(MeshTemp, elementDistgrid=Distgrid, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! obtain mesh lats and lons
-    call ESMF_MeshGet(Emesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
+    call ESMF_MeshGet(mesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     allocate(ownedElemCoords(spatialDim*numOwnedElements))
     allocate(lonMesh(numOwnedElements), latMesh(numOwnedElements))
-    call ESMF_MeshGet(Emesh, ownedElemCoords=ownedElemCoords)
+    call ESMF_MeshGet(mesh, ownedElemCoords=ownedElemCoords)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     do n = 1,numOwnedElements
@@ -809,22 +807,16 @@ contains
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call ice_realize_fields(gcomp, mesh=Emesh, &
+    call ice_realize_fields(gcomp, mesh=mesh, &
          flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-#ifdef CESMCOUPLED    
     !-----------------------------------------------------------------
-    ! Prescribed ice initialization - first get compid
+    ! Prescribed ice initialization
     !-----------------------------------------------------------------
 
-    call NUOPC_CompAttributeGet(gcomp, name='MCTID', value=cvalue, rc=rc)
+    call ice_prescribed_init(clock, mesh, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) compid  ! convert from string to integer
-
-    ! Having this if-defd means that MCT does not need to be build in a NEMS configuration
-    call ice_prescribed_init(lmpicom, compid, gindex_ice)
-#endif
 
     !-----------------------------------------------------------------
     ! Create cice export state
@@ -856,28 +848,12 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     endif
 
-#ifdef USE_ESMF_METADATA
-    convCIM  = "CIM"
-    purpComp = "Model Component Simulation Description"
-    call ESMF_AttributeAdd(comp, convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ShortName", "CICE", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "LongName", "CICE Model", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "Description", "CICE5", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ReleaseDate", "TBD", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ModelType", "Sea Ice",  convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "Name", "David Bailey", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "EmailAddress", "dbailey@ucar.edu", convention=convCIM, purpose=purpComp, rc=rc)
-    call ESMF_AttributeSet(comp, "ResponsiblePartyRole", "contact", convention=convCIM, purpose=purpComp, rc=rc)
-#endif
-
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
     call t_stopf ('cice_init_total')
 
     deallocate(gindex_ice)
     deallocate(gindex)
-
-    call shr_sys_flush(nu_diag)
 
   end subroutine InitializeRealize
 

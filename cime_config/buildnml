@@ -49,6 +49,7 @@ def _create_namelists(case, confdir, infile, nmlgen):
     hgrid = case.get_value('ICE_GRID')
     config['hgrid'] = hgrid
     config['cice_mode'] = cice_mode
+    config['driver'] = case.get_value("COMP_INTERFACE")
 
     cice_config_opts = case.get_value('CICE_CONFIG_OPTS')
     if "cice5" in cice_config_opts:
@@ -163,7 +164,10 @@ def _create_namelists(case, confdir, infile, nmlgen):
             'icefields_mechred_nml',
             'icefields_pond_nml',
             'icefields_nml']
-    if cice_mode == 'prescribed':
+
+    if case.get_value("COMP_INTERFACE") == 'nuopc':
+        groups.append('ice_prescribed_nuopc_nml')
+    else:
         groups.append('ice_prescribed_nml')
 
     namelist_file = os.path.join(confdir, "ice_in")
