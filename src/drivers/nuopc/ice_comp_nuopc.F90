@@ -22,7 +22,6 @@ module ice_comp_nuopc
   use shr_cal_mod            , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
   use ice_shr_methods        , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
   use ice_shr_methods        , only : set_component_logging, get_component_instance
-  use ice_shr_methods        , only : state_flddebug
   use ice_import_export      , only : ice_import, ice_export
   use ice_import_export      , only : ice_advertise_fields, ice_realize_fields
   use ice_domain_size        , only : nx_global, ny_global
@@ -73,9 +72,7 @@ module ice_comp_nuopc
   integer           :: flds_scalar_index_ny = 0
   integer           :: flds_scalar_index_nextsw_cday = 0
 
-  integer     , parameter :: dbug = 10
-  integer     , parameter :: debug_import = 0 ! internal debug level
-  integer     , parameter :: debug_export = 0 ! internal debug level
+  integer     , parameter :: dbug = 0
   character(*), parameter :: modName =  "(ice_comp_nuopc)"
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -834,11 +831,6 @@ contains
 
     ! TODO (mvertens, 2018-12-21): fill in iceberg_prognostic as .false.
 
-    if (debug_export > 0 .and. my_task==master_task) then
-       call State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
-            idate, sec, nu_diag, rc=rc)
-    end if
-
     !--------------------------------
     ! diagnostics
     !--------------------------------
@@ -1006,13 +998,6 @@ contains
     call ice_timer_stop(timer_cplrecv)
     call t_stopf ('cice_run_import')
 
-    ! write Debug output
-    if (debug_import  > 0 .and. my_task==master_task) then
-       call State_fldDebug(importState, flds_scalar_name, 'cice_import:', &
-            idate, sec, nu_diag, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
-
     !--------------------------------
     ! Advance cice and timestep update
     !--------------------------------
@@ -1036,12 +1021,6 @@ contains
 
     call ice_timer_stop(timer_cplsend)
     call t_stopf ('cice_run_export')
-
-    if (debug_export > 0 .and. my_task==master_task) then
-       call State_fldDebug(exportState, flds_scalar_name, 'cice_export:', &
-            idate, sec, nu_diag, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
 
     ! reset shr logging to my original values
     call shr_file_setLogUnit (shrlogunit)
