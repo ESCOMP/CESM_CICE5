@@ -68,8 +68,6 @@ module ice_comp_nuopc
 
   character(len=CL) :: flds_scalar_name = ''
   integer           :: flds_scalar_num = 0
-  integer           :: flds_scalar_index_nx = 0
-  integer           :: flds_scalar_index_ny = 0
   integer           :: flds_scalar_index_nextsw_cday = 0
 
   integer     , parameter :: dbug = 0
@@ -198,28 +196,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
        call shr_sys_abort(subname//'Need to set attribute ScalarFieldCount')
-    endif
-
-    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNX", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent .and. isSet) then
-       read(cvalue,*) flds_scalar_index_nx
-       write(logmsg,*) flds_scalar_index_nx
-       call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_nx = '//trim(logmsg), ESMF_LOGMSG_INFO)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxGridNX')
-    endif
-
-    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNY", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent .and. isSet) then
-       read(cvalue,*) flds_scalar_index_ny
-       write(logmsg,*) flds_scalar_index_ny
-       call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_ny = '//trim(logmsg), ESMF_LOGMSG_INFO)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxGridNY')
     endif
 
     call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxNextSwCday", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -822,13 +798,6 @@ contains
     call ice_export (exportstate, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    call State_SetScalar(dble(nx_global), flds_scalar_index_nx, exportState, &
-         flds_scalar_name, flds_scalar_num, rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call State_SetScalar(dble(ny_global), flds_scalar_index_ny, exportState, &
-         flds_scalar_name, flds_scalar_num, rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     ! TODO (mvertens, 2018-12-21): fill in iceberg_prognostic as .false.
 
     !--------------------------------
@@ -919,7 +888,6 @@ contains
     call State_GetScalar(importState, flds_scalar_index_nextsw_cday, nextsw_cday, &
          flds_scalar_name, flds_scalar_num, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     if (my_task == master_task) then
        write(nu_diag,F00) trim(subname),' cice istep, nextsw_cday = ',istep, nextsw_cday
     end if
