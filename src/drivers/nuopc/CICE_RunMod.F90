@@ -121,7 +121,7 @@ contains
     use ice_zbgc           , only: init_history_bgc, biogeochemistry
     use ice_zbgc_shared    , only: skl_bgc
     use ice_communicate    , only: MPI_COMM_ICE
-    use ice_prescribed_mod
+    use ice_prescribed_mod , only: prescribed_ice, ice_prescribed_run
 
     character(len=*), intent(in), optional :: restart_filename
 
@@ -145,7 +145,7 @@ contains
     call init_history_bgc
     call ice_timer_stop(timer_diags)   ! diagnostics/history
 
-    if(prescribed_ice) then  ! read prescribed ice
+    if (prescribed_ice) then  ! read prescribed ice
        call t_barrierf('cice_run_presc_BARRIER',MPI_COMM_ICE)
        call t_startf ('cice_run_presc')
        call ice_prescribed_run(idate, sec)
