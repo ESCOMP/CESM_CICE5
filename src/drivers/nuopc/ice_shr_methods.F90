@@ -33,7 +33,6 @@ module ice_shr_methods
   public  :: log_clock_advance
   public  :: state_getscalar
   public  :: state_setscalar
-  public  :: state_reset
   public  :: state_flddebug
   public  :: state_diagnose
   public  :: alarmInit  
@@ -218,10 +217,8 @@ contains
 
     call ESMF_VMGetCurrent(vm, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
     call ESMF_VMGet(vm, localPet=mytask, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
     call ESMF_StateGet(State, itemName=trim(flds_scalar_name), field=field, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -288,63 +285,6 @@ contains
     endif
 
   end subroutine state_setscalar
-
-!===============================================================================
-
-  subroutine state_reset(State, reset_value, rc)
-
-    ! ----------------------------------------------
-    ! Set all fields to value in State to value
-    ! ----------------------------------------------
-
-    ! intput/output variables
-    type(ESMF_State) , intent(inout) :: State
-    real(R8)         , intent(in)    :: reset_value
-    integer          , intent(out)   :: rc
-
-    ! local variables
-    integer                             :: i,j,n
-    type(ESMF_Field)                    :: lfield
-    integer                             :: fieldCount
-    integer                             :: lrank
-    character(ESMF_MAXSTR), allocatable :: lfieldnamelist(:)
-    real(R8), pointer                   :: fldptr1(:)
-    real(R8), pointer                   :: fldptr2(:,:)
-    real(R8), parameter                 :: czero = 0.0_R8
-    character(len=*),parameter          :: subname='(state_reset)'
-    ! ----------------------------------------------
-
-    rc = ESMF_SUCCESS
-
-    call ESMF_StateGet(State, itemCount=fieldCount, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    allocate(lfieldnamelist(fieldCount))
-    call ESMF_StateGet(State, itemNameList=lfieldnamelist, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    do n = 1, fieldCount
-       call ESMF_StateGet(State, itemName=trim(lfieldnamelist(n)), field=lfield, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       call field_getfldptr(lfield, fldptr1=fldptr1, fldptr2=fldptr2, rank=lrank, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       if (lrank == 0) then
-          ! no local data
-       elseif (lrank == 1) then
-          fldptr1 = reset_value
-       elseif (lrank == 2) then
-          fldptr2 = reset_value
-       else
-          call ESMF_LogWrite(trim(subname)//": ERROR in rank "//trim(lfieldnamelist(n)), ESMF_LOGMSG_ERROR)
-          rc = ESMF_FAILURE
-          return
-       endif
-    enddo
-
-    deallocate(lfieldnamelist)
-
-  end subroutine state_reset
 
 !===============================================================================
 
