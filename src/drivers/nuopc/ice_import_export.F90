@@ -492,7 +492,7 @@ contains
     if (State_FldChk(importState, 'Faxa_dstwet') .and. State_FldChk(importState, 'Faxa_dstdry')) then
        call state_getfldptr(importState, 'Faxa_dstwet', dataPtr2d_dstwet, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call state_getfldptr(importState, 'Faxa_dstwet', dataPtr2d_dstdry, rc)
+       call state_getfldptr(importState, 'Faxa_dstdry', dataPtr2d_dstdry, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        n = 0
        do iblk = 1, nblocks
@@ -1421,7 +1421,9 @@ contains
              do j = jlo, jhi
                 do i = ilo, ihi
                    n = n+1
-                   dataPtr2d(ungridded_index,n) = input(i,j,iblk)
+                   if ( lmask(i,j,iblk) .and. ifrac(i,j,iblk) > c0 ) then
+                      dataPtr2d(ungridded_index,n) = input(i,j,iblk)
+                   end if
                 end do
              end do
           else
