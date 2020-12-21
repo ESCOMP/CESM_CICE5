@@ -1328,7 +1328,9 @@ contains
     if (present(ungridded_index)) then
        call state_getfldptr(state, trim(fldname), dataPtr2d, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       dataptr2d(:,:) = c0
+       if (ungridded_index == 1) then
+          dataptr2d(:,:) = c0
+       end if
        n = 0
        do iblk = 1, nblocks
           this_block = get_block(blocks_ice(iblk),iblk)
