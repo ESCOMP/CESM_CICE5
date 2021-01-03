@@ -40,7 +40,7 @@ module ice_comp_mct
   use ice_domain,      only : nblocks, blocks_ice, halo_info, distrb_info
   use ice_blocks,      only : block, get_block, nx_block, ny_block
   use ice_grid,        only : tlon, tlat, tarea, tmask, anglet, hm, &
- 		              grid_type, t2ugrid_vector, gridcpl_file, ocn_gridcell_frac
+ 		              grid_type, t2ugrid_vector, gridcpl_file
   use ice_constants,   only : c0, c1, spval_dbl, rad_to_deg, radius, secday
   use ice_communicate, only : my_task, master_task, MPI_COMM_ICE
   use ice_calendar,    only : istep, istep1, force_restart_now, write_ic,&
@@ -64,7 +64,8 @@ module ice_comp_mct
   use ice_global_reductions
   use ice_broadcast
   use CICE_RunMod
-  use ice_atmo, only : flux_convergence_tolerance, flux_convergence_max_iteration, use_coldair_outbreak_mod
+  use ice_atmo        , only : flux_convergence_tolerance, flux_convergence_max_iteration, use_coldair_outbreak_mod
+  use ice_latlon_grid , only : latlon_grid, ocn_gridcell_frac
 
 ! !PUBLIC MEMBER FUNCTIONS:
   implicit none
@@ -100,11 +101,7 @@ module ice_comp_mct
   type(mct_rearr) :: rearr_iloc2ice
   integer         :: nxcpl, nycpl  ! size of coupling grid
   logical         :: other_cplgrid ! using different coupling grid
-#ifdef COMPARE_TO_NUOPC
-  logical         :: compare_to_nuopc = .true.
-#else
   logical         :: compare_to_nuopc = .false.
-#endif
 !=======================================================================
 
 contains
@@ -123,51 +120,50 @@ contains
 !
 ! !USES:
 
-    use CICE_InitMod
-    use ice_restart_shared, only: runid, runtype, restart_dir, restart_format
-    use ice_history,        only: accum_hist
-    use ice_history_shared, only: history_dir, history_file, model_doi_url
+    use CICE_InitMod       , only : cice_init1, cice_init2
+    use ice_restart_shared , only : runid, runtype, restart_dir, restart_format
+    use ice_history        , only : accum_hist
+    use ice_history_shared , only : history_dir, history_file, model_doi_url
+    use ice_grid           , only : init_grid2
 !
 ! !ARGUMENTS:
-    type(ESMF_Clock)         , intent(inout) :: EClock
-    type(seq_cdata)          , intent(inout) :: cdata_i
-    type(mct_aVect)          , intent(inout) :: x2i_i, i2x_i
-    character(len=*), optional  , intent(in) :: NLFilename ! Namelist filename
+    type(ESMF_Clock) , intent(inout)        :: EClock
+    type(seq_cdata)  , intent(inout)        :: cdata_i
+    type(mct_aVect)  , intent(inout)        :: x2i_i, i2x_i
+    character(len=*) , intent(in), optional :: NLFilename ! Namelist filename
 !
 ! !LOCAL VARIABLES:
 !
-    type(mct_gsMap)             , pointer :: gsMap_ice
-    type(mct_gGrid)             , pointer :: dom_i
-    type(seq_infodata_type)     , pointer :: infodata   ! Input init object
-    integer                               :: lsize,lsize_loc
-    integer                               :: xoff,yoff
-    integer                               :: nxg,nyg
-    integer                               :: k, iblk
-
-    type(mct_gsMap) :: gsmap_extend  ! local gsmaps
-
-    character(len=256) :: drvarchdir         ! driver archive directory
-    character(len=32)  :: starttype          ! infodata start type
-    integer            :: start_ymd          ! Start date (YYYYMMDD)
-    integer            :: start_tod          ! start time of day (s)
-    integer            :: curr_ymd           ! Current date (YYYYMMDD)
-    integer            :: curr_tod           ! Current time of day (s)
-    integer            :: ref_ymd            ! Reference date (YYYYMMDD)
-    integer            :: ref_tod            ! reference time of day (s)
-    integer            :: iyear              ! yyyy
-    integer            :: nyrp               ! yyyy
-    integer            :: dtime              ! time step
-    integer            :: shrlogunit,shrloglev ! old values
-    integer            :: iam,ierr
-    integer            :: lbnum
-    integer            :: daycal(13)  !number of cumulative days per month
-    integer            :: nleaps      ! number of leap days before current year
-    integer            :: mpicom_loc  ! temporary mpicom
-    logical (kind=log_kind) :: atm_aero
-    real(r8)        :: mrss, mrss0,msize,msize0
-    type(ESMF_TIME) :: currTime
-    integer         :: rc
-    character(len=*), parameter  :: SubName = "ice_init_mct"
+    type(mct_gsMap)         , pointer :: gsMap_ice
+    type(mct_gGrid)         , pointer :: dom_i
+    type(seq_infodata_type) , pointer :: infodata             ! Input init object
+    integer                           :: lsize,lsize_loc
+    integer                           :: xoff,yoff
+    integer                           :: nxg,nyg
+    integer                           :: k, iblk
+    type(mct_gsMap)                   :: gsmap_extend         ! local gsmaps
+    character(len=256)                :: drvarchdir           ! driver archive directory
+    character(len=32)                 :: starttype            ! infodata start type
+    integer                           :: start_ymd            ! Start date (YYYYMMDD)
+    integer                           :: start_tod            ! start time of day (s)
+    integer                           :: curr_ymd             ! Current date (YYYYMMDD)
+    integer                           :: curr_tod             ! Current time of day (s)
+    integer                           :: ref_ymd              ! Reference date (YYYYMMDD)
+    integer                           :: ref_tod              ! reference time of day (s)
+    integer                           :: iyear                ! yyyy
+    integer                           :: nyrp                 ! yyyy
+    integer                           :: dtime                ! time step
+    integer                           :: shrlogunit,shrloglev ! old values
+    integer                           :: iam,ierr
+    integer                           :: lbnum
+    integer                           :: daycal(13)           ! number of cumulative days per month
+    integer                           :: nleaps               ! number of leap days before current year
+    integer                           :: mpicom_loc           ! temporary mpicom
+    logical (kind=log_kind)           :: atm_aero
+    real(r8)                          :: mrss, mrss0,msize,msize0
+    type(ESMF_TIME)                   :: currTime
+    integer                           :: rc
+    character(len=*), parameter       :: SubName = "ice_init_mct"
 !EOP
 !-----------------------------------------------------------------------
 
@@ -251,16 +247,28 @@ contains
     dt = real(dtime)
 
     !=============================================================
-    ! Initialize cice because grid information is needed for
-    ! creation of GSMap_ice.  cice_init also sets time manager info
+    ! Initialize cice
     !=============================================================
 
     inst_name   = seq_comm_name(ICEID)
     inst_index  = seq_comm_inst(ICEID)
     inst_suffix = seq_comm_suffix(ICEID)
-    call t_startf ('cice_init')
-    call cice_init( mpicom_loc )
-    call t_stopf ('cice_init')
+
+    call t_startf ('cice_init1')
+    call cice_init1( mpicom_loc )
+    call t_stopf ('cice_init1')
+
+    call t_startf ('cice_initgrid')
+    if (trim(grid_type) == 'latlon') then
+       call latlon_grid() ! lat lon grid for sequential CCSM (CAM mode)
+    else
+       call init_grid2()
+    end if
+    call t_stopf ('cice_initgrid')
+
+    call t_startf ('cice_init2')
+    call cice_init2()
+    call t_stopf ('cice_init2')
 
     call seq_infodata_GetData(infodata, tfreeze_option=tfrz_option )
 
