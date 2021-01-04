@@ -205,9 +205,8 @@ contains
     real(kind=dbl_kind)          :: aice_max         ! maximun ice concentration
     real(kind=dbl_kind), pointer :: dataptr(:)
     integer                      :: rc               ! ESMF return code
-    character(*),parameter       :: subName = "('ice_prescribed_run')"
-    character(*),parameter       :: F00 = "('(ice_prescribed_run) ',a,2g20.13)"
     logical                      :: first_time = .true.
+    character(*),parameter       :: subName = " (ice_prescribed_run) "
     !------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -245,7 +244,7 @@ contains
     if (first_time) then
        aice_max = maxval(ice_cov)
        if (aice_max > c10) then
-          write(nu_diag,F00) "ERROR: Ice conc data must be in fraction, aice_max= ", aice_max
+          write(nu_diag,'(a,d20.13)') trim(subname)//"ERROR: Ice conc data must be in fraction, aice_max= ", aice_max
           rc = ESMF_FAILURE
           if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) then
              call ESMF_Finalize(endflag=ESMF_END_ABORT)

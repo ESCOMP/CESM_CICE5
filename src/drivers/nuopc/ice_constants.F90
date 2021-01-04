@@ -215,7 +215,8 @@
         m2_to_km2     = 1.e-6_dbl_kind  ,&! m^2 to km^2
         kg_to_g       = 1000._dbl_kind  ,&! kilograms to grams
         mps_to_cmpdy  = 8.64e6_dbl_kind ,&! m per s to cm per day
-        rad_to_deg    = 180._dbl_kind/pi  ! degree-radian conversion
+        rad_to_deg    = 180._dbl_kind/pi,&! radian->degree conversion
+        deg_to_rad    = pi/180._dbl_kind  ! degree->radian conversion
 
       ! useful for debugging
       integer (kind=int_kind), parameter :: &

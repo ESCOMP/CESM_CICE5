@@ -25,12 +25,13 @@ module ice_import_export
   use ice_flux           , only : fiso_atm, fiso_ocn, fiso_rain, fiso_evap
   use ice_flux           , only : Qa_iso, Qref_iso, HDO_ocn, H2_18O_ocn, H2_16O_ocn
   use ice_state          , only : vice, vsno, aice, aicen_init, trcr
-  use ice_grid           , only : tlon, tlat, tarea, tmask, anglet, hm, ocn_gridcell_frac
+  use ice_grid           , only : tlon, tlat, tarea, tmask, anglet, hm
   use ice_grid           , only : grid_type, t2ugrid_vector
   use ice_boundary       , only : ice_HaloUpdate
   use ice_fileunits      , only : nu_diag
   use ice_communicate    , only : my_task, master_task, MPI_COMM_ICE
   use ice_prescribed_mod , only : prescribed_ice
+  use ice_mesh_mod       , only : ocn_gridcell_frac
   use ice_shr_methods    , only : chkerr
   use perf_mod           , only : t_startf, t_stopf, t_barrierf
 

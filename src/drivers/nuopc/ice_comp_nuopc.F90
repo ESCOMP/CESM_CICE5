@@ -21,17 +21,9 @@ module ice_comp_nuopc
   use shr_orb_mod            , only : shr_orb_decl, shr_orb_params, SHR_ORB_UNDEF_REAL, SHR_ORB_UNDEF_INT
   use shr_cal_mod            , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
   use ice_shr_methods        , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
-  use ice_shr_methods        , only : set_component_logging, get_component_instance
-  use ice_shr_methods        , only : state_flddebug
-  use ice_import_export      , only : ice_import, ice_export
-  use ice_import_export      , only : ice_advertise_fields, ice_realize_fields
+  use ice_shr_methods        , only : set_component_logging, get_component_instance, state_flddebug
+  use ice_import_export      , only : ice_import, ice_export, ice_advertise_fields, ice_realize_fields
   use ice_domain_size        , only : nx_global, ny_global
-  use ice_domain             , only : nblocks, blocks_ice, distrb_info
-  use ice_blocks             , only : block, get_block, nx_block, ny_block, nblocks_x, nblocks_y
-  use ice_blocks             , only : nblocks_tot, get_block_parameter
-  use ice_distribution       , only : ice_distributiongetblockloc
-  use ice_grid               , only : tlon, tlat, hm, tarea, ULON, ULAT
-  use ice_constants          , only : rad_to_deg
   use ice_communicate        , only : init_communicate, my_task, master_task, mpi_comm_ice
   use ice_calendar           , only : force_restart_now, write_ic
   use ice_calendar           , only : idate, mday, time, month, daycal, time2sec, year_init
@@ -48,7 +40,9 @@ module ice_comp_nuopc
   use ice_prescribed_mod     , only : ice_prescribed_init
   use ice_atmo               , only : flux_convergence_tolerance, flux_convergence_max_iteration
   use ice_atmo               , only : use_coldair_outbreak_mod
-  use CICE_InitMod           , only : CICE_Init
+  use ice_mesh_mod           , only : ice_mesh_set_distgrid, ice_mesh_latlon_grid, ice_mesh_check
+  use ice_grid               , only : init_grid2, grid_type
+  use CICE_InitMod           , only : CICE_Init1, CICE_Init2
   use CICE_RunMod            , only : CICE_Run
   use perf_mod               , only : t_startf, t_stopf, t_barrierf
   use ice_timers
@@ -251,18 +245,11 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    type(ESMF_DistGrid)     :: distGrid
-    type(ESMF_Mesh)         :: mesh, meshTemp
-    integer                 :: spatialDim
-    integer                 :: numOwnedElements
-    real(R8), pointer       :: ownedElemCoords(:)
-    real(r8), pointer       :: lat(:), latMesh(:)
-    real(r8), pointer       :: lon(:), lonMesh(:)
-    integer , allocatable   :: gindex_ice(:)
-    integer , allocatable   :: gindex_elim(:)
-    integer , allocatable   :: gindex(:)
-    integer                 :: globalID
-    character(CL)           :: cvalue
+    integer                 :: lmpicom
+    integer                 :: localPet
+    integer                 :: npes
+    type(ESMF_DistGrid)     :: ice_distgrid
+    type(ESMF_Mesh)         :: ice_mesh
     type(ESMF_VM)           :: vm
     type(ESMF_Time)         :: currTime           ! Current time
     type(ESMF_Time)         :: startTime          ! Start time
@@ -282,29 +269,12 @@ contains
     integer                 :: yy,mm,dd           ! Temporaries for time query
     integer                 :: iyear              ! yyyy
     integer                 :: dtime              ! time step
-    integer                 :: lmpicom
     integer                 :: shrlogunit         ! original log unit
     character(len=cs)       :: starttype          ! infodata start type
-    integer                 :: lsize              ! local size of coupling array
-    character(len=512)      :: diro
-    character(len=512)      :: logfile
+    character(CL)           :: cvalue
     logical                 :: isPresent
-    integer                 :: localPet
-    integer                 :: n,c,g,i,j,m        ! indices
-    integer                 :: iblk, jblk         ! indices
-    integer                 :: ig, jg             ! indices
-    integer                 :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
-    type(block)             :: this_block         ! block information for current block
-    real(R8)                :: diff_lon
-    integer                 :: npes
-    integer                 :: num_elim_global
-    integer                 :: num_elim_local
-    integer                 :: num_elim
-    integer                 :: num_ice
-    integer                 :: num_elim_gcells    ! local number of eliminated gridcells
-    integer                 :: num_elim_blocks    ! local number of eliminated blocks
-    integer                 :: num_total_blocks
-    integer                 :: my_elim_start, my_elim_end
+    character(len=CL)       :: ice_meshfile
+    character(len=CL)       :: ice_maskfile
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
     !--------------------------------
@@ -318,7 +288,6 @@ contains
 
     call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -352,7 +321,6 @@ contains
 
     call cice_orbital_init(gcomp, nu_diag, my_task==master_task, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     call cice_orbital_update(clock, nu_diag, my_task==master_task, eccen, obliqr, lambm0, mvelpp, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -507,15 +475,69 @@ contains
     call shr_file_setLogUnit (shrlogunit)
 
     !----------------------------------------------------------------------------
-    ! Initialize cice
+    ! Initialize cice1
     !----------------------------------------------------------------------------
 
-    ! Note that cice_init also sets time manager info as well as mpi communicator info,
-    ! including master_task and my_task
+    !call t_startf ('cice_init1')
+    call cice_init1()
+    !call t_stopf ('cice_init1')
 
-    call t_startf ('cice_init')
-    call cice_init
-    call t_stopf ('cice_init')
+    !----------------------------------------------------------------------------
+    ! Initialize grid info
+    !----------------------------------------------------------------------------
+
+    ! Initialize cice mesh and mask if appropriate
+    !call t_startf ('cice_initgrid')
+
+    ! Determine mesh input file
+    call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=ice_meshfile, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Determine mask input file
+    call NUOPC_CompAttributeGet(gcomp, name='mesh_icemask', value=ice_maskfile, isPresent=isPresent, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (.not. isPresent) then
+       ice_maskfile = ice_meshfile
+    end if
+
+    if (my_task == master_task) then
+       write(nu_diag,*)'mesh file for cice domain is ',trim(ice_meshfile)
+       write(nu_diag,*)'mask file for cice domain is ',trim(ice_maskfile)
+    end if
+
+    ! Determine the model distgrid using the decomposition obtained in
+    ! call to init_grid1 called from cice_init1
+    call ice_mesh_set_distgrid(ice_distgrid, rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Read in the ice mesh on the cice distribution
+    ice_mesh = ESMF_MeshCreate(filename=trim(ice_meshfile), fileformat=ESMF_FILEFORMAT_ESMFMESH, &
+         elementDistGrid=ice_distgrid, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Initialize the cice mesh and the cice mask
+    if (trim(grid_type) == 'latlon') then
+       ! In this case cap code determines the lat/lon mask
+       call ice_mesh_latlon_grid(ice_mesh, ice_maskfile, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       ! In this case init_grid2 will initialize tlon, tlat, area and hm
+       call init_grid2()  
+       call ice_mesh_check(ice_mesh, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    !call t_stopf ('cice_initgrid')
+
+    !----------------------------------------------------------------------------
+    ! Initialize cice2
+    !----------------------------------------------------------------------------
+
+    ! Note that cice_init2 also sets time manager info as well as mpi communicator info,
+    ! including master_task and my_task
+    !call t_startf ('cice_init2')
+    call cice_init2()
+    !call t_stopf ('cice_init2')
 
     !----------------------------------------------------------------------------
     ! reset shr logging to my log file
@@ -594,218 +616,11 @@ contains
        call accum_hist(dt)  ! write initial conditions
     end if
 
-    !---------------------------------------------------------------------------
-    ! Determine the global index space needed for the distgrid
-    !---------------------------------------------------------------------------
-
-    ! number the local grid to get allocation size for gindex_ice
-    lsize = 0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-          do i = ilo, ihi
-             lsize = lsize + 1
-          enddo
-       enddo
-    enddo
-
-    ! set global index array
-    allocate(gindex_ice(lsize))
-    n = 0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             ig = this_block%i_glob(i)
-             jg = this_block%j_glob(j)
-             gindex_ice(n) = (jg-1)*nx_global + ig
-          enddo
-       enddo
-    enddo
-
-    ! Determine total number of eliminated blocks globally
-    globalID = 0
-    num_elim_global = 0  ! number of eliminated blocks
-    num_total_blocks = 0
-    do jblk=1,nblocks_y
-       do iblk=1,nblocks_x
-          globalID = globalID + 1
-          num_total_blocks = num_total_blocks + 1
-          if (distrb_info%blockLocation(globalID) == 0) then
-             num_elim_global = num_elim_global + 1
-          end if
-       end do
-    end do
-
-    if (num_elim_global > 0) then
-
-       ! Distribute the eliminated blocks in a round robin fashion amoung processors
-       num_elim_local = num_elim_global / npes
-       my_elim_start = num_elim_local*localPet + min(localPet, mod(num_elim_global, npes)) + 1
-       if (localPet < mod(num_elim_global, npes)) then
-          num_elim_local = num_elim_local + 1
-       end if
-       my_elim_end = my_elim_start + num_elim_local - 1
-
-       ! Determine the number of eliminated gridcells locally
-       globalID = 0
-       num_elim_blocks = 0  ! local number of eliminated blocks
-       num_elim_gcells = 0
-       do jblk=1,nblocks_y
-          do iblk=1,nblocks_x
-             globalID = globalID + 1
-             if (distrb_info%blockLocation(globalID) == 0) then
-                num_elim_blocks = num_elim_blocks + 1
-                if (num_elim_blocks >= my_elim_start .and. num_elim_blocks <= my_elim_end) then
-                   this_block = get_block(globalID, globalID)
-                   num_elim_gcells = num_elim_gcells + &
-                        (this_block%jhi-this_block%jlo+1) * (this_block%ihi-this_block%ilo+1)
-                end if
-             end if
-          end do
-       end do
-
-       ! Determine the global index space of the eliminated gridcells
-       allocate(gindex_elim(num_elim_gcells))
-       globalID = 0
-       num_elim_gcells = 0  ! local number of eliminated gridcells
-       num_elim_blocks = 0  ! local number of eliminated blocks
-       do jblk=1,nblocks_y
-          do iblk=1,nblocks_x
-             globalID = globalID + 1
-             if (distrb_info%blockLocation(globalID) == 0) then
-                this_block = get_block(globalID, globalID)
-                num_elim_blocks = num_elim_blocks + 1
-                if (num_elim_blocks >= my_elim_start .and. num_elim_blocks <= my_elim_end) then
-                   do j=this_block%jlo,this_block%jhi
-                      do i=this_block%ilo,this_block%ihi
-                         num_elim_gcells = num_elim_gcells + 1
-                         ig = this_block%i_glob(i)
-                         jg = this_block%j_glob(j)
-                         gindex_elim(num_elim_gcells) = (jg-1)*nx_global + ig
-                      end do
-                   end do
-                end if
-             end if
-          end do
-       end do
-
-       ! create a global index that includes both active and eliminated gridcells
-       num_ice  = size(gindex_ice)
-       num_elim = size(gindex_elim)
-       allocate(gindex(num_elim + num_ice))
-       do n = 1,num_ice
-          gindex(n) = gindex_ice(n)
-       end do
-       do n = num_ice+1,num_ice+num_elim
-          gindex(n) = gindex_elim(n-num_ice)
-       end do
-
-       deallocate(gindex_elim)
-
-    else
-
-       ! No eliminated land blocks
-       num_ice = size(gindex_ice)
-       allocate(gindex(num_ice))
-       do n = 1,num_ice
-          gindex(n) = gindex_ice(n)
-       end do
-
-    end if
-
-    !---------------------------------------------------------------------------
-    ! Create distGrid from global index array
-    !---------------------------------------------------------------------------
-
-    DistGrid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    !---------------------------------------------------------------------------
-    ! Create the CICE mesh
-    !---------------------------------------------------------------------------
-
-    ! read in the mesh
-    call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=cvalue, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    MeshTemp = ESMF_MeshCreate(filename=trim(cvalue), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (my_task == master_task) then
-       write(nu_diag,*)'mesh file for cice domain is ',trim(cvalue)
-    end if
-
-    ! recreate the mesh using the above distGrid
-    Mesh = ESMF_MeshCreate(MeshTemp, elementDistgrid=Distgrid, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    ! obtain mesh lats and lons
-    call ESMF_MeshGet(mesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    allocate(ownedElemCoords(spatialDim*numOwnedElements))
-    allocate(lonMesh(numOwnedElements), latMesh(numOwnedElements))
-    call ESMF_MeshGet(mesh, ownedElemCoords=ownedElemCoords)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    do n = 1,numOwnedElements
-       lonMesh(n) = ownedElemCoords(2*n-1)
-       latMesh(n) = ownedElemCoords(2*n)
-    end do
-
-    ! obtain internally generated cice lats and lons for error checks
-    allocate(lon(lsize))
-    allocate(lat(lsize))
-    n = 0
-    do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
-       do j = jlo, jhi
-          do i = ilo, ihi
-             n = n+1
-             lon(n) = tlon(i,j,iblk)*rad_to_deg
-             lat(n) = tlat(i,j,iblk)*rad_to_deg
-          enddo
-       enddo
-    enddo
-
-    ! error check differences between internally generated lons and those read in
-    do n = 1,lsize
-       diff_lon = abs(lonMesh(n) - lon(n))
-       if ( (diff_lon > 1.e2  .and. abs(diff_lon - 360_r8) > 1.e-1) .or.&
-            (diff_lon > 1.e-3 .and. diff_lon < 1._r8) ) then
-          !write(6,100)n,lonMesh(n),lon(n), diff_lon
-100       format('ERROR: CICE  n, lonmesh(n), lon(n), diff_lon = ',i6,2(f21.13,3x),d21.5)
-          !call shr_sys_abort()
-       end if
-       if (abs(latMesh(n) - lat(n)) > 1.e-1) then
-          !write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
-101       format('ERROR: CICE n, latmesh(n), lat(n), diff_lat = ',i6,2(f21.13,3x),d21.5)
-          !call shr_sys_abort()
-       end if
-    end do
-
-    ! deallocate memory
-    deallocate(ownedElemCoords)
-    deallocate(lon, lonMesh)
-    deallocate(lat, latMesh)
-
     !-----------------------------------------------------------------
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call ice_realize_fields(gcomp, mesh=mesh, &
+    call ice_realize_fields(gcomp, mesh=ice_mesh, &
          flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -813,7 +628,7 @@ contains
     ! Prescribed ice initialization
     !-----------------------------------------------------------------
 
-    call ice_prescribed_init(clock, mesh, rc)
+    call ice_prescribed_init(clock, ice_mesh, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-----------------------------------------------------------------
@@ -844,9 +659,6 @@ contains
     if (dbug > 5) call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
     call t_stopf ('cice_init_total')
-
-    deallocate(gindex_ice)
-    deallocate(gindex)
 
   end subroutine InitializeRealize
 
