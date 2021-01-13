@@ -3,7 +3,7 @@ module ice_comp_nuopc
   !----------------------------------------------------------------------------
   ! This is the NUOPC cap for CICE
   !----------------------------------------------------------------------------
-
+!$ use omp_lib, only : omp_set_num_threads
   use ESMF
   use NUOPC                  , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
   use NUOPC                  , only : NUOPC_CompFilterPhaseMap, NUOPC_IsUpdated, NUOPC_IsAtTime
@@ -78,6 +78,7 @@ module ice_comp_nuopc
   real(R8)               :: orb_obliq       ! attribute - obliquity in degrees
   real(R8)               :: orb_mvelp       ! attribute - moving vernal equinox longitude
   real(R8)               :: orb_eccen       ! attribute and update-  orbital eccentricity
+  integer                :: nthrds          ! Number of threads per task for this component
 
   character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
   character(len=*) , parameter :: orb_variable_year    = 'variable_year'
@@ -674,7 +675,6 @@ contains
   !===============================================================================
 
   subroutine ModelAdvance(gcomp, rc)
-!$ use omp_lib, only : omp_set_num_threads
     use ESMF, only : esmf_vmget
     !---------------------------------------------------------------------------
     ! Run CICE
@@ -682,7 +682,6 @@ contains
 
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
-    type(ESMF_VM) :: vm
     integer, intent(out) :: rc
 
     ! Local variables
@@ -706,7 +705,7 @@ contains
     integer                    :: day_sync   ! Sync current day
     integer                    :: tod_sync   ! Sync current time of day (sec)
     integer                    :: localpet
-    integer                    :: nthrds
+    integer                    :: ierr
     character(CL)              :: restart_date
     character(CL)              :: restart_filename
     character(*)   , parameter :: F00   = "('(ice_comp_nuopc) ',2a,i8,d21.14)"
@@ -730,20 +729,6 @@ contains
 
     call shr_file_getLogUnit (shrlogunit)
     call shr_file_setLogUnit (nu_diag)
-
-    call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ESMF_VMGet(vm, localpet=localpet, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ESMF_VMGet(vm, pet=localpet, PeCount=nthrds, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if(nthrds==1) then
-       call NUOPC_CompAttributeGet(gcomp, "nthreads", value=cvalue, rc=rc)
-       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-       read(cvalue,*) nthrds
-    endif
 !$  call omp_set_num_threads(nthrds)
     !--------------------------------
     ! Query the Component for its clock, importState and exportState
