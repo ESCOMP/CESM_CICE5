@@ -524,8 +524,9 @@ contains
     type(ESMF_Array)         :: elemMaskArray
     integer                  :: lsize_mask, lsize_dst
     integer                  :: n, spatialDim
-    real(dbl_kind)           :: fminval = 0.001_dbl_kind
+    real(dbl_kind)           :: fminval = 0.001_dbl_kind ! TODO: make this a share constant
     real(dbl_kind)           :: fmaxval = 1._dbl_kind
+    real(r8)                 :: lfrac
     !-------------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -572,23 +573,21 @@ contains
          termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_TOTAL, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! now determine ice_mask and ice_frac
     call ESMF_MeshGet(ice_mesh, spatialDim=spatialDim, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldGet(field_dst, farrayptr=dataptr1d, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    ice_frac(:) = dataptr1d(:)
+
+    ! now determine ice_mask and ice_frac
     do n = 1,lsize_dst
-       if (ice_frac(n) > fmaxval) then
-          ice_frac(n) = 1._dbl_kind
-       end if
-       if (ice_frac(n) < fminval) then
-          ice_frac(n) = 0._dbl_kind
-       end if
-       if (ice_frac(n) /= 0._dbl_kind) then
-          ice_mask(n) = 1
-       else
+       lfrac = 1._r8 - dataptr1d(n)
+       if (lfrac > fmaxval) lfrac = 1._r8
+       if (lfrac < fminval) lfrac = 0._r8
+       ice_frac(n) = 1._r8 - lfrac
+       if (ice_frac(n) == 0._r8) then
           ice_mask(n) = 0
+       else
+          ice_mask(n) = 1
        end if
     enddo
 
