@@ -507,7 +507,7 @@ contains
 
     ! Determine the model distgrid using the decomposition obtained in
     ! call to init_grid1 called from cice_init1
-    call ice_mesh_set_distgrid(ice_distgrid, rc)
+    call ice_mesh_set_distgrid(localpet, npes, ice_distgrid, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Read in the ice mesh on the cice distribution

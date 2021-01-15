@@ -28,23 +28,23 @@ module ice_mesh_mod
 contains
 !=======================================================================
 
-  subroutine ice_mesh_set_distgrid(distgrid, rc)
+  subroutine ice_mesh_set_distgrid(localpet, npes, distgrid, rc)
 
     ! Determine the global index space needed for the distgrid
 
     ! input/output variables
-    type(ESMF_DistGrid) , intent(out) :: distgrid
-    integer             , intent(out) :: rc
+    integer             , intent(in)    :: localpet
+    integer             , intent(in)    :: npes
+    type(ESMF_DistGrid) , intent(inout) :: distgrid
+    integer             , intent(out)   :: rc
 
     ! local variables
     integer               :: n,c,g,i,j,m        ! indices
     integer               :: iblk, jblk         ! indices
+    integer               :: ig, jg             ! indices
     integer               :: ilo, ihi, jlo, jhi ! beginning and end of physical domain
     integer               :: lsize              ! local size of coupling array
-    integer               :: ig, jg             ! indices
-    integer               :: localPet
     type(block)           :: this_block         ! block information for current block
-    real(dbl_kind)        :: diff_lon
     integer               :: num_elim_global
     integer               :: num_elim_local
     integer               :: num_elim
@@ -57,7 +57,6 @@ contains
     integer , allocatable :: gindex_ice(:)
     integer , allocatable :: gindex_elim(:)
     integer               :: globalID
-    integer               :: npes
     character(len=*), parameter :: subname = ' ice_mesh_set_distgrid: '
     !----------------------------------------------------------------
 
@@ -502,6 +501,8 @@ contains
   !===============================================================================
   subroutine ice_mesh_set_mask(ice_mesh, ice_maskfile, ice_mask, ice_frac, rc)
 
+    use ice_constants, only : c0, c1
+
     ! input/out variables
     type(ESMF_Mesh)          , intent(in)  :: ice_mesh
     character(len=*)         , intent(in)  :: ice_maskfile
@@ -526,7 +527,7 @@ contains
     integer                  :: n, spatialDim
     real(dbl_kind)           :: fminval = 0.001_dbl_kind ! TODO: make this a share constant
     real(dbl_kind)           :: fmaxval = 1._dbl_kind
-    real(r8)                 :: lfrac
+    real(dbl_kind)           :: lfrac
     !-------------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -580,11 +581,11 @@ contains
 
     ! now determine ice_mask and ice_frac
     do n = 1,lsize_dst
-       lfrac = 1._r8 - dataptr1d(n)
-       if (lfrac > fmaxval) lfrac = 1._r8
-       if (lfrac < fminval) lfrac = 0._r8
-       ice_frac(n) = 1._r8 - lfrac
-       if (ice_frac(n) == 0._r8) then
+       lfrac = c1 - dataptr1d(n)
+       if (lfrac > fmaxval) lfrac = c1
+       if (lfrac < fminval) lfrac = c0
+       ice_frac(n) = c1 - lfrac
+       if (ice_frac(n) == c0) then
           ice_mask(n) = 0
        else
           ice_mask(n) = 1
@@ -609,14 +610,14 @@ contains
   !===============================================================================
   subroutine ice_mesh_check(ice_mesh, rc)
 
-    ! Create the CICE mesh
+    ! Check CICE mesh
 
-    use ice_constants, only : rad_to_deg
+    use ice_constants, only : rad_to_deg, c1
     use ice_grid     , only : tlon, tlat
 
     ! input/output parameters
-    type(ESMF_Mesh)  , intent(out) :: ice_mesh
-    integer          , intent(out) :: rc
+    type(ESMF_Mesh)  , intent(inout) :: ice_mesh
+    integer          , intent(out)   :: rc
 
     ! local variables
     type(ESMF_DistGrid)     :: distGrid
@@ -627,19 +628,30 @@ contains
     integer                 :: spatialDim
     integer                 :: numOwnedElements
     real(dbl_kind), pointer :: ownedElemCoords(:)
-    real(dbl_kind), pointer :: lat(:), latmesh(:)
-    real(dbl_kind), pointer :: lon(:), lonmesh(:)
+    real(dbl_kind), pointer :: lat(:), latMesh(:)
+    real(dbl_kind), pointer :: lon(:), lonMesh(:)
     real(dbl_kind)          :: diff_lon
+    real(dbl_kind)          :: diff_lat
     !---------------------------------------------------
 
     ! error check differences between internally generated lons and those read in
     call ESMF_MeshGet(ice_mesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     allocate(ownedElemCoords(spatialDim*numownedelements))
-    allocate(lon(numOwnedElements))
-    allocate(lat(numOwnedElements))
     allocate(lonmesh(numOwnedElements))
     allocate(latmesh(numOwnedElements))
+    call ESMF_MeshGet(ice_mesh, ownedElemCoords=ownedElemCoords)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    do n = 1,numOwnedElements
+       lonMesh(n) = ownedElemCoords(2*n-1)
+       latMesh(n) = ownedElemCoords(2*n)
+    end do
+
+    ! obtain internally generated cice lats and lons for error checks
+    allocate(lon(numOwnedElements))
+    allocate(lat(numOwnedElements))
+    lon(:) = 0.
+    lat(:) = 0.
     n = 0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
@@ -650,29 +662,30 @@ contains
        do j = jlo, jhi
           do i = ilo, ihi
              n = n + 1
-             lonmesh(n) = ownedElemCoords(2*n-1)
-             latmesh(n) = ownedElemCoords(2*n)
              lon(n) = tlon(i,j,iblk)*rad_to_deg
              lat(n) = tlat(i,j,iblk)*rad_to_deg
+
+             ! error check differences between internally generated lons and those read in
+             diff_lon = abs(lonMesh(n) - lon(n))
+             if ( (diff_lon > 1.e2  .and. abs(diff_lon - 360.) > 1.e-1) .or.&
+                  (diff_lon > 1.e-3 .and. diff_lon < c1) ) then
+                write(6,100)n,lonMesh(n),lon(n), diff_lon
+                !call shr_sys_abort()
+             end if
+             if (abs(latMesh(n) - lat(n)) > 1.e-1) then
+                write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
+                !call shr_sys_abort()
+             end if
+
           enddo
        enddo
     enddo
+    write(6,*)'DEBUG: n-1,numownedelements= ',n-1,numownedElements
 
-    do n = 1,numOwnedElements
-       diff_lon = abs(lonMesh(n) - lon(n))
-       if ( (diff_lon > 1.e2  .and. abs(diff_lon - 360._dbl_kind) > 1.e-1) .or.&
-            (diff_lon > 1.e-3 .and. diff_lon < 1._dbl_kind) ) then
-          write(6,100)n,lonMesh(n),lon(n), diff_lon
-100       format('ERROR: CICE  n, lonmesh(n), lon(n), diff_lon = ',i6,2(f21.13,3x),d21.5)
-          !call shr_sys_abort()
-       end if
-       if (abs(latMesh(n) - lat(n)) > 1.e-1) then
-          write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
-101       format('ERROR: CICE n, latmesh(n), lat(n), diff_lat = ',i6,2(f21.13,3x),d21.5)
-          !call shr_sys_abort()
-       end if
-    end do
+100 format('ERROR: CICE n, lonmesh, lon, diff_lon = ',i6,2(f21.13,3x),d21.5)
+101 format('ERROR: CICE n, latmesh, lat, diff_lat = ',i6,2(f21.13,3x),d21.5)
 
+    ! deallocate memory
     deallocate(ownedElemCoords)
     deallocate(lon, lonMesh)
     deallocate(lat, latMesh)
