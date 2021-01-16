@@ -494,11 +494,8 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Determine mask input file
-    call NUOPC_CompAttributeGet(gcomp, name='mesh_icemask', value=ice_maskfile, isPresent=isPresent, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='mesh_mask', value=ice_maskfile, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (.not. isPresent) then
-       ice_maskfile = ice_meshfile
-    end if
 
     if (my_task == master_task) then
        write(nu_diag,*)'mesh file for cice domain is ',trim(ice_meshfile)
