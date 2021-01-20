@@ -277,7 +277,6 @@ contains
     logical                 :: isPresent
     character(len=CL)       :: ice_meshfile
     character(len=CL)       :: ice_maskfile
-    integer                 :: localPet
     integer                 :: nthrds
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
