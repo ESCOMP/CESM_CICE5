@@ -754,7 +754,7 @@ contains
     call state_setexport(exportState, 'ice_fraction', input=ailohi, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    if (trim(grid_type) == 'latlon') then
+    if (trim(grid_type) == 'setmask') then
        call state_setexport(exportState, 'ice_mask', input=ocn_gridcell_frac, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else

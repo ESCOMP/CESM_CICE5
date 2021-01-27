@@ -627,10 +627,11 @@
     <desc>
       type of grid
     </desc>
-    <valid_values>displaced_pole,tripole,panarctic,latlon,rectangular</valid_values>
+    <valid_values>displaced_pole,tripole,panarctic,latlon,rectangular,setmask</valid_values>
     <values>
       <value>displaced_pole</value>
-      <value cice_mode="prescribed">latlon</value>
+      <value cice_mode="prescribed" driver="mct">latlon</value>
+      <value cice_mode="prescribed" driver="nuopc">setmask</value>
       <value hgrid="tx0.66v1">tripole</value>
       <value hgrid="tx0.1v2">tripole</value>
       <value hgrid="tx0.1v3">tripole</value>

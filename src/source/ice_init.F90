@@ -1158,7 +1158,8 @@
              grid_type  /=  'rectangular'    .and. &
              grid_type  /=  'cpom_grid'      .and. &
              grid_type  /=  'regional'       .and. &
-             grid_type  /=  'latlon' ) then
+             grid_type  /=  'latlon'         .and. &
+             grid_type  /=  'setmask') then
             call abort_ice('ice_init: unknown grid_type')
          endif
 

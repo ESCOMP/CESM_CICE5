@@ -40,7 +40,7 @@ module ice_comp_nuopc
   use ice_prescribed_mod     , only : ice_prescribed_init
   use ice_atmo               , only : flux_convergence_tolerance, flux_convergence_max_iteration
   use ice_atmo               , only : use_coldair_outbreak_mod
-  use ice_mesh_mod           , only : ice_mesh_set_distgrid, ice_mesh_latlon_grid, ice_mesh_check
+  use ice_mesh_mod           , only : ice_mesh_set_distgrid, ice_mesh_setmask_from_maskfile, ice_mesh_check
   use ice_grid               , only : init_grid2, grid_type
   use CICE_InitMod           , only : CICE_Init1, CICE_Init2
   use CICE_RunMod            , only : CICE_Run
@@ -513,9 +513,9 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Initialize the cice mesh and the cice mask
-    if (trim(grid_type) == 'latlon') then
-       ! In this case cap code determines the lat/lon mask
-       call ice_mesh_latlon_grid(ice_mesh, ice_maskfile, rc=rc)
+    if (trim(grid_type) == 'setmask') then
+       ! In this case cap code determines the mask file
+       call ice_mesh_setmask_from_maskfile(ice_mesh, ice_maskfile, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
        ! In this case init_grid2 will initialize tlon, tlat, area and hm

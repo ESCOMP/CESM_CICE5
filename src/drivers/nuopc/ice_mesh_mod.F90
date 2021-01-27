@@ -13,10 +13,10 @@ module ice_mesh_mod
   private
 
   public  :: ice_mesh_set_distgrid
-  public  :: ice_mesh_latlon_grid
+  public  :: ice_mesh_setmask_from_maskfile
   public  :: ice_mesh_check
 
-  private :: ice_mesh_set_mask
+  private :: ice_mesh_create_mask
 
   ! Only relevant for lat-lon grids gridcell value of [1 - (land fraction)] (T-cell)
   real (dbl_kind), allocatable, public :: ocn_gridcell_frac(:,:,:)
@@ -200,7 +200,7 @@ contains
   end subroutine ice_mesh_set_distgrid
   
   !=======================================================================
-  subroutine ice_mesh_latlon_grid(ice_mesh, ice_maskfile, rc)
+  subroutine ice_mesh_setmask_from_maskfile(ice_mesh, ice_maskfile, rc)
 
     use ice_scam      , only : scmlat, scmlon, single_column
     use ice_grid      , only : tlon, tlat, hm, tarea, ULON, ULAT, HTN, HTE, ANGLE, ANGLET
@@ -249,7 +249,7 @@ contains
     real (dbl_kind)              :: scamdata             ! temporary
     integer (int_kind), pointer  :: ice_mask(:)
     real(dbl_kind)    , pointer  :: ice_frac(:)
-    character(len=*), parameter  :: subname = ' ice_mesh_latlon_grid'
+    character(len=*), parameter  :: subname = ' ice_mesh_setmask_from_maskfile'
     !---------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -261,7 +261,7 @@ contains
 
        ! Obtain the model mask and model frac by mapping the mesh created by reading
        ! in the model_maskfile to the model mesh and then resetting the model mesh mask
-       call ice_mesh_set_mask(ice_mesh, ice_maskfile, ice_mask, ice_frac, rc=rc)
+       call ice_mesh_create_mask(ice_mesh, ice_maskfile, ice_mask, ice_frac, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        ! Obtain mesh areas in radians^2
@@ -326,7 +326,7 @@ contains
              write(nu_diag,*) 'Because you have selected the column model flag'
              write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
              write(nu_diag,*) 'ice_domain_size.F and recompile'
-             call abort_ice ('latlongrid: check nx_global, ny_global')
+             call abort_ice ('ice_mesh_setmask_from_maskfile: check nx_global, ny_global')
           endif
        end if
 
@@ -496,10 +496,10 @@ contains
     ! Also create hemisphere masks (mask-n northern, mask-s southern)
     call makemask()
 
-  end subroutine ice_mesh_latlon_grid
+  end subroutine ice_mesh_setmask_from_maskfile
 
   !===============================================================================
-  subroutine ice_mesh_set_mask(ice_mesh, ice_maskfile, ice_mask, ice_frac, rc)
+  subroutine ice_mesh_create_mask(ice_mesh, ice_maskfile, ice_mask, ice_frac, rc)
 
     use ice_constants, only : c0, c1
 
@@ -605,7 +605,7 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     deallocate(mask_src)
 
-  end subroutine ice_mesh_set_mask
+  end subroutine ice_mesh_create_mask
 
   !===============================================================================
   subroutine ice_mesh_check(ice_mesh, rc)
