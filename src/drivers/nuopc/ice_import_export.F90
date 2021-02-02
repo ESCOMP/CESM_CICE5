@@ -342,10 +342,10 @@ contains
        else
           mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
           med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
-          if (abs(mod2med_areacor(n) - 1._r8) > 1.e-13) then
-             write(6,'(a,i8,2x,d21.14,2x)')' AREACOR cice5: n, abs(mod2med_areacor(n)-1)', &
-                  n, abs(mod2med_areacor(n) - 1._r8)
-          end if
+          ! if (abs(mod2med_areacor(n) - 1._r8) > 1.e-13) then
+          !    write(6,'(a,i8,2x,d21.14,2x)')' AREACOR cice5: n, abs(mod2med_areacor(n)-1)', &
+          !         n, abs(mod2med_areacor(n) - 1._r8)
+          ! end if
        end if
     end do
     deallocate(model_areas)
@@ -540,7 +540,7 @@ contains
        ! bcphodry  ungridded_index=2
        ! bcphiwet  ungridded_index=3
 
-       call state_getfldptr(importState, 'Faxa_bcph', dataPtr2d, rc=rc)
+       call state_getfldptr(importState, 'Faxa_bcph', dataPtr2d, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        n = 0
        do iblk = 1, nblocks
@@ -559,9 +559,9 @@ contains
 
     ! Sum over all dry and wet dust fluxes from ath atmosphere
     if (State_FldChk(importState, 'Faxa_dstwet') .and. State_FldChk(importState, 'Faxa_dstdry')) then
-       call state_getfldptr(importState, 'Faxa_dstwet', dataPtr2d_dstwet, rc=rc)
+       call state_getfldptr(importState, 'Faxa_dstwet', dataPtr2d_dstwet, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call state_getfldptr(importState, 'Faxa_dstdry', dataPtr2d_dstdry, rc=rc)
+       call state_getfldptr(importState, 'Faxa_dstdry', dataPtr2d_dstdry, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        n = 0
        do iblk = 1, nblocks
@@ -947,6 +947,7 @@ contains
        call state_setexport(exportState, 'Faii_swnet' , input=fswabs, lmask=tmask, ifrac=ailohi, &
             areacor=mod2med_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     end if
 
     ! ------
@@ -989,7 +990,7 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! salt to ocean (salt flux from melting)
-    call state_setexport(exportState, 'mean_salt_rate' , input=fresh, lmask=tmask, ifrac=ailohi, &
+    call state_setexport(exportState, 'mean_salt_rate' , input=fsalt, lmask=tmask, ifrac=ailohi, &
          areacor=mod2med_areacor, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -1036,6 +1037,7 @@ contains
        ! 16O => ungridded_index=1
        ! 18O => ungridded_index=2
        ! HDO => ungridded_index=3
+
        call state_setexport(exportState, 'mean_fresh_water_to_ocean_rate_wiso' , input=fiso_ocn, index=1, &
             lmask=tmask, ifrac=ailohi, ungridded_index=3, areacor=mod2med_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1448,6 +1450,7 @@ contains
     integer                      :: i, j, iblk, n, i1, j1 ! indices
     real(kind=dbl_kind), pointer :: dataPtr1d(:)          ! mesh
     real(kind=dbl_kind), pointer :: dataPtr2d(:,:)        ! mesh
+    integer                      :: ice_num
     character(len=*), parameter  :: subname='(ice_import_export:state_setexport)'
     ! ----------------------------------------------
 
@@ -1483,8 +1486,9 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr2d,dim=2)
+          do n = 1,ice_num
              dataPtr2d(:,n) = dataPtr2d(:,n) * areacor(n)
           end do
        end if
@@ -1513,8 +1517,9 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr1d)
+          do n = 1,ice_num
              dataPtr1d(n) = dataPtr1d(n) * areacor(n)
           end do
        end if
@@ -1546,6 +1551,7 @@ contains
     integer                      :: i, j, iblk, n, i1, j1 ! incides
     real(kind=dbl_kind), pointer :: dataPtr1d(:)          ! mesh
     real(kind=dbl_kind), pointer :: dataPtr2d(:,:)        ! mesh
+    integer                      :: ice_num
     character(len=*), parameter  :: subname='(ice_import_export:state_setexport)'
     ! ----------------------------------------------
 
@@ -1579,8 +1585,9 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr2d,dim=2)
+          do n = 1,ice_num
              dataPtr2d(:,n) = dataPtr2d(:,n) * areacor(n)
           end do
        end if
@@ -1611,8 +1618,9 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr1d)
+          do n = 1,ice_num
              dataPtr1d(n) = dataPtr1d(n) * areacor(n)
           end do
        end if
