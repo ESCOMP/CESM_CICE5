@@ -255,6 +255,7 @@ contains
   subroutine ice_realize_fields(gcomp, mesh, grid, flds_scalar_name, flds_scalar_num, rc)
 
     use ice_constants, only : radius
+    use shr_mpi_mod  , only : shr_mpi_min, shr_mpi_max
 
     ! input/output variables
     type(ESMF_GridComp)                      :: gcomp
@@ -275,6 +276,14 @@ contains
     real(r8), allocatable :: mesh_areas(:)
     real(r8), allocatable :: model_areas(:)
     real(r8), pointer     :: dataptr(:)
+    real(r8)              :: max_mod2med_areacor
+    real(r8)              :: max_med2mod_areacor
+    real(r8)              :: min_mod2med_areacor
+    real(r8)              :: min_med2mod_areacor
+    real(r8)              :: max_mod2med_areacor_glob
+    real(r8)              :: max_med2mod_areacor_glob
+    real(r8)              :: min_mod2med_areacor_glob
+    real(r8)              :: min_med2mod_areacor_glob
     character(len=*), parameter :: subname='(ice_import_export:realize_fields)'
     !---------------------------------------------------------------------------
 
@@ -315,8 +324,12 @@ contains
     allocate(mesh_areas(numOwnedElements))
     mesh_areas(:) = dataptr(:)
 
-    ! Determine model areas
+    ! Determine flux correction factors (module variables)
     allocate(model_areas(numOwnedElements))
+    allocate(mod2med_areacor(numOwnedElements))
+    allocate(med2mod_areacor(numOwnedElements))
+    mod2med_areacor(:) = 1._r8
+    med2mod_areacor(:) = 1._r8
     n = 0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
@@ -328,28 +341,29 @@ contains
           do i = ilo, ihi
              n = n+1
              model_areas(n) = tarea(i,j,iblk)/(radius*radius)
+             mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
+             med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
           enddo
        enddo
     enddo
-
-    ! Determine flux correction factors (module variables)
-    allocate (mod2med_areacor(numOwnedElements))
-    allocate (med2mod_areacor(numOwnedElements))
-    do n = 1,numOwnedElements
-       if (model_areas(n) == mesh_areas(n)) then
-          mod2med_areacor(n) = 1._r8
-          med2mod_areacor(n) = 1._r8
-       else
-          mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
-          med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
-          ! if (abs(mod2med_areacor(n) - 1._r8) > 1.e-13) then
-          !    write(6,'(a,i8,2x,d21.14,2x)')' AREACOR cice5: n, abs(mod2med_areacor(n)-1)', &
-          !         n, abs(mod2med_areacor(n) - 1._r8)
-          ! end if
-       end if
-    end do
     deallocate(model_areas)
     deallocate(mesh_areas)
+
+    min_mod2med_areacor = minval(mod2med_areacor)
+    max_mod2med_areacor = maxval(mod2med_areacor)
+    min_med2mod_areacor = minval(med2mod_areacor)
+    max_med2mod_areacor = maxval(med2mod_areacor)
+    call shr_mpi_max(max_mod2med_areacor, max_mod2med_areacor_glob, mpi_comm_ice)
+    call shr_mpi_min(min_mod2med_areacor, min_mod2med_areacor_glob, mpi_comm_ice)
+    call shr_mpi_max(max_med2mod_areacor, max_med2mod_areacor_glob, mpi_comm_ice)
+    call shr_mpi_min(min_med2mod_areacor, min_med2mod_areacor_glob, mpi_comm_ice)
+
+    if (my_task == master_task) then
+       write(nu_diag,'(2A,2g23.15,A )') trim(subname),' :  min_mod2med_areacor, max_mod2med_areacor ',&
+            min_mod2med_areacor_glob, max_mod2med_areacor_glob, 'CICE5'
+       write(nu_diag,'(2A,2g23.15,A )') trim(subname),' :  min_med2mod_areacor, max_med2mod_areacor ',&
+            min_med2mod_areacor_glob, max_med2mod_areacor_glob, 'CICE5'
+    end if
 
   end subroutine ice_realize_fields
 
@@ -956,8 +970,7 @@ contains
 
     ! flux of shortwave through ice to ocean
     call state_setexport(exportState, 'mean_sw_pen_to_ocn' , input=fswthru, lmask=tmask, ifrac=ailohi, &
-         !areacor=mod2med_areacor, rc=rc)
-         rc=rc)
+         areacor=mod2med_areacor, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! flux of vis dir shortwave through ice to ocean
@@ -1094,8 +1107,7 @@ contains
           ! Note: no need zero out pass-through fields over land for benefit of x2oacc fields in cpl hist files since
           ! the export state has been zeroed out at the beginning
           call state_setexport(exportState, 'mean_sw_pen_to_ocn_ifrac_n', input=fswthrun_ai, index=n, &
-               ! lmask=tmask, ifrac=ailohi, ungridded_index=n, areacor=mod2med_areacor, rc=rc)
-               lmask=tmask, ifrac=ailohi, ungridded_index=n, rc=rc)
+               lmask=tmask, ifrac=ailohi, ungridded_index=n, areacor=mod2med_areacor, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end do
     end if
@@ -1491,7 +1503,7 @@ contains
        ice_num = n
        if (present(areacor)) then
           do n = 1,ice_num
-             dataPtr2d(:,n) = dataPtr2d(:,n) * areacor(n)
+             dataPtr2d(ungridded_index,n) = dataPtr2d(ungridded_index,n) * areacor(n)
           end do
        end if
     else
@@ -1590,7 +1602,7 @@ contains
        ice_num = n
        if (present(areacor)) then
           do n = 1,ice_num
-             dataPtr2d(:,n) = dataPtr2d(:,n) * areacor(n)
+             dataPtr2d(ungridded_index,n) = dataPtr2d(ungridded_index,n) * areacor(n)
           end do
        end if
     else
