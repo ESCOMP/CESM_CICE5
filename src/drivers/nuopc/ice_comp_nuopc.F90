@@ -256,7 +256,6 @@ contains
     type(ESMF_Time)         :: stopTime           ! Stop time
     type(ESMF_Time)         :: refTime            ! Ref time
     type(ESMF_TimeInterval) :: timeStep           ! Model timestep
-    type(ESMF_Calendar)     :: esmf_calendar      ! esmf calendar
     type(ESMF_CalKind_Flag) :: esmf_caltype       ! esmf calendar type
     integer                 :: start_ymd          ! Start date (YYYYMMDD)
     integer                 :: start_tod          ! start time of day (s)
