@@ -15,7 +15,7 @@ module ice_comp_nuopc
   use NUOPC_Model            , only : model_label_SetRunClock    => label_SetRunClock
   use NUOPC_Model            , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model            , only : NUOPC_ModelGet, SetVM
-  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
+  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs
   use shr_sys_mod            , only : shr_sys_abort
   use shr_file_mod           , only : shr_file_getlogunit, shr_file_setlogunit
   use shr_orb_mod            , only : shr_orb_decl, shr_orb_params, SHR_ORB_UNDEF_REAL, SHR_ORB_UNDEF_INT
@@ -304,7 +304,7 @@ contains
     call get_component_instance(gcomp, inst_suffix, inst_index, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    inst_name = "ICE"//trim(inst_suffix)
+    inst_name = "ICE"
 
     !----------------------------------------------------------------------------
     ! start cice timers
@@ -348,7 +348,7 @@ contains
        ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just the current time
 
        ! TOOD (mvertens, 2019-03-21): need to get the perpetual run working
-     
+
        if (trim(runtype) /= 'initial') then
           ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
           nextsw_cday = -1.0_r8
@@ -360,7 +360,7 @@ contains
        end if
     else
        ! This would be the NEMS branch
-       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is 
+       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is
        ! simply a CPP variable declaratino of NEMSCOUPLED
 
        runtype = 'initial' ! determined from the namelist in ice_init if CESMCOUPLED is not defined
@@ -519,7 +519,7 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
        ! In this case init_grid2 will initialize tlon, tlat, area and hm
-       call init_grid2()  
+       call init_grid2()
        call ice_mesh_check(ice_mesh, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
@@ -1037,7 +1037,7 @@ contains
     ! input/output variables
     type(ESMF_GridComp)                 :: gcomp
     integer             , intent(in)    :: logunit
-    logical             , intent(in)    :: mastertask 
+    logical             , intent(in)    :: mastertask
     integer             , intent(out)   :: rc              ! output error
 
     ! local variables
@@ -1131,12 +1131,12 @@ contains
   subroutine cice_orbital_update(clock, logunit,  mastertask, eccen, obliqr, lambm0, mvelpp, rc)
 
     !----------------------------------------------------------
-    ! Update orbital settings 
+    ! Update orbital settings
     !----------------------------------------------------------
 
     ! input/output variables
     type(ESMF_Clock) , intent(in)    :: clock
-    integer          , intent(in)    :: logunit 
+    integer          , intent(in)    :: logunit
     logical          , intent(in)    :: mastertask
     real(R8)         , intent(inout) :: eccen  ! orbital eccentricity
     real(R8)         , intent(inout) :: obliqr ! Earths obliquity in rad
@@ -1146,7 +1146,7 @@ contains
 
     ! local variables
     type(ESMF_Time)   :: CurrTime ! current time
-    integer           :: year     ! model year at current time 
+    integer           :: year     ! model year at current time
     integer           :: orb_year ! orbital year for current orbital computation
     character(len=CL) :: msgstr   ! temporary
     logical           :: lprint
@@ -1162,7 +1162,7 @@ contains
        orb_year = orb_iyear + (year - orb_iyear_align)
        lprint = mastertask
     else
-       orb_year = orb_iyear 
+       orb_year = orb_iyear
        if (first_time) then
           lprint = mastertask
           first_time = .false.
