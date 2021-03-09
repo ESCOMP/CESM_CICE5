@@ -404,7 +404,8 @@ contains
     integer                      :: maxIndex(2)
     real(dbl_kind)               :: mincornerCoord(2)
     real(dbl_kind)               :: maxcornerCoord(2)
-    character(len=*), parameter :: subname = ' ice_mesh_create_scol_from_nn '
+    real(dbl_kind)               :: scol_landfrac
+    character(len=*), parameter  :: subname = ' ice_mesh_create_scol_from_nn '
     ! ----------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -474,15 +475,24 @@ contains
     if (status /= nf90_noerr) call abort_ice (subname//' get_var area')
 
     ! the single column domain file contains land fraction and land mask!
-    status = nf90_get_var(ncid, varid_frac, scol_frac, start)
+    status = nf90_get_var(ncid, varid_frac, scol_landfrac, start)
     if (status /= nf90_noerr) call abort_ice (subname//' get_var frac')
-
-    scol_frac = 1._dbl_kind - scol_frac
+    scol_frac = 1._dbl_kind - scol_landfrac
     ocn_gridcell_frac = scol_frac
+
+    ! determine single column mask
     if (scol_frac >= 0.) then
        scol_mask = 1._dbl_kind
     else
        scol_mask = 0._dbl_kind
+    end if
+    write(6,*)'DEBUG: ocn_mask = ',scol_mask
+
+    ! determine if single column point is valid
+    if (scol_frac >= 0.) then
+       scol_valid = .true.
+    else
+       scol_valid = .false.
     end if
     
     status = nf90_close(ncid)
@@ -505,12 +515,6 @@ contains
     ice_mesh = ESMF_MeshCreate(lgrid, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! determine if single column point is valid
-    if (scol_mask == 0._dbl_kind) then
-       scol_valid = .false.
-    else
-       scol_valid = .true.
-    end if
 
   end subroutine ice_mesh_create_scolumn
 
