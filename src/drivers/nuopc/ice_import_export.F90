@@ -252,13 +252,14 @@ contains
 
 !==============================================================================
 
-  subroutine ice_realize_fields(gcomp, mesh, grid, flds_scalar_name, flds_scalar_num, rc)
+  subroutine ice_realize_fields(importState, exportState,  mesh, grid, flds_scalar_name, flds_scalar_num, rc)
 
     use ice_constants, only : radius
     use shr_mpi_mod  , only : shr_mpi_min, shr_mpi_max
 
     ! input/output variables
-    type(ESMF_GridComp)                      :: gcomp
+    type(ESMF_State)      :: importState
+    type(ESMF_State)      :: exportState
     type(ESMF_Mesh) , optional , intent(in)  :: mesh
     type(ESMF_Grid) , optional , intent(in)  :: grid
     character(len=*)           , intent(in)  :: flds_scalar_name
@@ -266,8 +267,6 @@ contains
     integer                    , intent(out) :: rc
 
     ! local variables
-    type(ESMF_State)      :: importState
-    type(ESMF_State)      :: exportState
     type(ESMF_Field)      :: lfield
     integer               :: numOwnedElements
     integer               :: i, j, iblk, n
@@ -288,9 +287,6 @@ contains
     !---------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
-
-    call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call fldlist_realize( &
          state=ExportState, &
