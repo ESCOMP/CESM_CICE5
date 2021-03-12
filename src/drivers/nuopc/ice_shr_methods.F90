@@ -264,8 +264,6 @@ contains
 
     rc = ESMF_SUCCESS
 
-    write(6,*)'DEBUG: scalar_name = ',flds_scalar_name
-
     call ESMF_VMGetCurrent(vm, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_VMGet(vm, localPet=mytask, rc=rc)

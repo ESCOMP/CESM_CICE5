@@ -367,10 +367,9 @@ contains
   end subroutine ice_mesh_setmask_from_maskfile
 
   !===============================================================================
-  subroutine ice_mesh_create_scolumn(single_column_domainfile, ice_mesh, rc)
+  subroutine ice_mesh_create_scolumn(scol_lon, scol_lat, ice_mesh, rc)
 
     use ice_constants , only : c0, c1
-    use ice_scam      , only : single_column, scol_valid
     use ice_scam      , only : scmlat, scmlon, scol_area, scol_mask, scol_frac, scol_nj
     use netcdf
 
@@ -378,132 +377,31 @@ contains
     ! or for a regional grid
 
     ! input/output variables
-    character(len=*) , intent(in)  :: single_column_domainfile
-    type(ESMF_Mesh)  , intent(out) :: ice_mesh
-    integer          , intent(out) :: rc
+    real(dbl_kind)  , intent(in)  :: scol_lon 
+    real(dbl_kind)  , intent(in)  :: scol_lat
+    type(ESMF_Mesh) , intent(out) :: ice_mesh
+    integer         , intent(out) :: rc
 
     ! local variables
-    type(ESMF_Grid)              :: lgrid
-    integer                      :: i,j,ni,nj
-    integer (int_kind)           :: ncid
-    integer (int_kind)           :: dimid, ier
-    integer                      :: varid_xc
-    integer                      :: varid_yc
-    integer                      :: varid_area
-    integer                      :: varid_mask
-    integer                      :: varid_frac
-    integer (int_kind)           :: start(2)             ! Start index to read in
-    integer (int_kind)           :: start3(3)            ! Start index to read in
-    integer (int_kind)           :: count3(3)            ! Number of points to read in
-    integer (int_kind)           :: status               ! status flag
-    real (dbl_kind), allocatable :: lats(:)              ! temporary
-    real (dbl_kind), allocatable :: lons(:)              ! temporary
-    real (dbl_kind), allocatable :: pos_lons(:)          ! temporary
-    real (dbl_kind), allocatable :: glob_grid(:,:)       ! temporary
-    real (dbl_kind)              :: pos_scol_lon         ! temporary
-    integer                      :: maxIndex(2)
-    real(dbl_kind)               :: mincornerCoord(2)
-    real(dbl_kind)               :: maxcornerCoord(2)
-    real(dbl_kind)               :: scol_landfrac
-    character(len=*), parameter  :: subname = ' ice_mesh_create_scol_from_nn '
+    type(ESMF_Grid) :: lgrid 
+    integer         :: maxIndex(2)
+    real(dbl_kind)  :: mincornerCoord(2)
+    real(dbl_kind)  :: maxcornerCoord(2)
+    integer         :: i, j,iblk, jblk      ! indices
+    integer         :: ilo, ihi, jlo, jhi   ! beginning and end of physical domain
+    type (block)    :: this_block           ! block information for current block
+    character(len=*), parameter  :: subname = ' ice_mesh_create_scolumn'
     ! ----------------------------------------------
 
     rc = ESMF_SUCCESS
 
-    status = nf90_open(single_column_domainfile, NF90_NOWRITE, ncid)
-    if (status /= nf90_noerr) then
-       call abort_ice (trim(subname) //': Cannot open '//trim(single_column_domainfile))
-    endif
-    status = nf90_inq_dimid (ncid, 'ni', dimid)
-    status = nf90_inquire_dimension(ncid, dimid, len=ni)
-    status = nf90_inq_dimid (ncid, 'nj', dimid)
-    status = nf90_inquire_dimension(ncid, dimid, len=nj)
-    scol_nj = nj
-
-    status = nf90_inq_varid(ncid, 'xc' , varid_xc)
-    if (status /= nf90_noerr) call abort_ice (subname//' inq_varid xc')
-    status = nf90_inq_varid(ncid, 'yc' , varid_yc)
-    if (status /= nf90_noerr) call abort_ice (subname//' inq_varid yc')
-    status = nf90_inq_varid(ncid, 'area' , varid_area)
-    if (status /= nf90_noerr) call abort_ice (subname//' inq_varid area')
-    status = nf90_inq_varid(ncid, 'mask' , varid_mask)
-    if (status /= nf90_noerr) call abort_ice (subname//' inq_varid mask')
-    status = nf90_inq_varid(ncid, 'frac' , varid_frac)
-    if (status /= nf90_noerr) call abort_ice (subname//' inq_varid frac')
-
-    ! Read in domain file for single column
-    allocate(lats(nj))
-    allocate(lons(ni))
-    allocate(pos_lons(ni))
-    allocate(glob_grid(ni,nj))
-
-    start3=(/1,1,1/)
-    count3=(/ni,nj,1/)
-    status = nf90_get_var(ncid, varid_xc, glob_grid, start3, count3)
-    if (status /= nf90_noerr) call abort_ice (subname//' get_var xc')
-    do i = 1,ni
-       lons(i) = glob_grid(i,1)
-    end do
-    status = nf90_get_var(ncid, varid_yc, glob_grid, start3, count3)
-    if (status /= nf90_noerr) call abort_ice (subname//' get_var yc')
-    do j = 1,nj
-       lats(j) = glob_grid(1,j)
-    end do
-
-    ! find nearest neighbor indices of scol_lon and scol_lat in single_column_domain file
-    ! convert lons array and scol_lon to 0,360 and find index of value closest to 0
-    ! and obtain single-column longitude/latitude indices to retrieve
-    pos_lons(:)  = mod(lons(:) + 360._dbl_kind,360._dbl_kind)
-    pos_scol_lon = mod(scmlon  + 360._dbl_kind,360._dbl_kind)
-    start(1) = (MINLOC(abs(pos_lons-pos_scol_lon),dim=1))
-    start(2) = (MINLOC(abs(lats    -scmlat      ),dim=1))
-
-    deallocate(lats)
-    deallocate(lons)
-    deallocate(pos_lons)
-    deallocate(glob_grid)
-
-    ! read in value of nearest neighbor lon and RESET scmlon and scmlat
-    ! also get area of gridcell, mask and frac
-    status = nf90_get_var(ncid, varid_xc, scmlon, start)
-    if (status /= nf90_noerr) call abort_ice (subname//' get_var xc')
-
-    status = nf90_get_var(ncid, varid_yc, scmlat, start)
-    if (status /= nf90_noerr) call abort_ice (subname//' get_var yc')
-
-    status = nf90_get_var(ncid, varid_area, scol_area, start)
-    if (status /= nf90_noerr) call abort_ice (subname//' get_var area')
-
-    ! the single column domain file contains land fraction and land mask!
-    status = nf90_get_var(ncid, varid_frac, scol_landfrac, start)
-    if (status /= nf90_noerr) call abort_ice (subname//' get_var frac')
-    scol_frac = 1._dbl_kind - scol_landfrac
-    ocn_gridcell_frac = scol_frac
-
-    ! determine single column mask
-    if (scol_frac >= 0.) then
-       scol_mask = 1._dbl_kind
-    else
-       scol_mask = 0._dbl_kind
-    end if
-    write(6,*)'DEBUG: ocn_mask = ',scol_mask
-
-    ! determine if single column point is valid
-    if (scol_frac >= 0.) then
-       scol_valid = .true.
-    else
-       scol_valid = .false.
-    end if
-    
-    status = nf90_close(ncid)
-
-    ! determine mincornerCoord and maxcornerCoord neede to create ESMF grid
-    maxIndex(1)       = 1                          ! number of lons
-    maxIndex(2)       = 1                          ! number of lats
-    mincornerCoord(1) = scmlon - scol_area/2._dbl_kind ! min lon
-    mincornerCoord(2) = scmlat - scol_area/2._dbl_kind ! min lat
-    maxcornerCoord(1) = scmlon + scol_area/2._dbl_kind ! max lon
-    maxcornerCoord(2) = scmlat + scol_area/2._dbl_kind ! max lat
+    ! Use center and come up with arbitrary area delta lon and lat = .1 degree
+    maxIndex(1)       = 1                ! number of lons
+    maxIndex(2)       = 1                ! number of lats
+    mincornerCoord(1) = scol_lon - .1_dbl_kind ! min lon
+    mincornerCoord(2) = scol_lat - .1_dbl_kind ! min lat
+    maxcornerCoord(1) = scol_lon + .1_dbl_kind ! max lon
+    maxcornerCoord(2) = scol_lat + .1_dbl_kind ! max lat
 
     ! create the ESMF grid
     lgrid = ESMF_GridCreateNoPeriDimUfrm (maxindex=maxindex, &
@@ -515,7 +413,10 @@ contains
     ice_mesh = ESMF_MeshCreate(lgrid, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-
+    ! Allocate module variable ocn_gridcell_frac
+    allocate(ocn_gridcell_frac(nx_block,ny_block,max_blocks))
+    ocn_gridcell_frac(:,:,:) = scol_frac
+        
   end subroutine ice_mesh_create_scolumn
 
   !===============================================================================
@@ -541,12 +442,11 @@ contains
     ! Check for consistency
     if (single_column) then
        if ((nx_global /= 1).or. (ny_global /= 1)) then
-          if (my_task == master_task) then
-             write(nu_diag,*) 'Because you have selected the column model flag'
-             write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
-             write(nu_diag,*) 'ice_domain_size.F and recompile'
-          end if
-          call abort_ice (' ice_mesh_init_tlon_tlat_area_hm: check nx_global, ny_global')
+          write(nu_diag,*) 'nx_global = ',nx_global
+          write(nu_diag,*) 'ny_global = ',ny_global
+          write(nu_diag,*) 'Because you have selected the column model flag'
+          write(nu_diag,*) 'then require nx_global=ny_global=1 in file ice_domain_size.F'
+          call abort_ice(' ice_mesh_init_tlon_tlat_area_hm: nx_global and ny_global need to be 1 for single column')
        else
           write(nu_diag,'(a,f10.5)')' single column mode lon/lat does contain ocn with ocn fraction ',scol_frac
        end if

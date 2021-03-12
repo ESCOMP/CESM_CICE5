@@ -29,7 +29,7 @@ module ice_comp_nuopc
   use ice_calendar           , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
   use ice_orbital            , only : eccen, obliqr, lambm0, mvelpp
   use ice_kinds_mod          , only : dbl_kind, int_kind
-  use ice_scam               , only : scmlat, scmlon, scol_mask, scol_frac, single_column, scol_valid
+  use ice_scam               , only : scmlat, scmlon, scol_mask, scol_frac, scol_ni, scol_nj, scol_valid, single_column
   use ice_fileunits          , only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
   use ice_ocean              , only : tfrz_option
   use ice_therm_shared       , only : ktherm
@@ -273,14 +273,18 @@ contains
     character(len=cs)       :: starttype          ! infodata start type
     logical                 :: isPresent
     character(CL)           :: cvalue
-    character(CL)           :: single_column_domainfile
+    character(CL)           :: single_column_lnd_domainfile
     character(len=CL)       :: ice_meshfile
     character(len=CL)       :: ice_maskfile
     type(ESMF_Field)        :: lfield
     character(CL) ,pointer  :: lfieldnamelist(:) => null()
     integer                 :: fieldcount
-    real(r8), pointer       :: fldptr(:)
+    real(r8), pointer       :: fldptr1d(:)
+    real(r8), pointer       :: fldptr2d(:,:)
     integer                 :: n
+    real(r8)                :: scol_lon
+    real(r8)                :: scol_lat
+    integer                 :: rank
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
     !--------------------------------
@@ -293,43 +297,46 @@ contains
     ! set all export state fields to zero and return
     !----------------------------------------------------------------------------
 
-    scmlon = -999.99
-    call NUOPC_CompAttributeGet(gcomp, name='scol_lon', value=cvalue, isPresent=isPresent, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='scol_lon', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) scmlon
-    end if
-    scmlat = -999.99
-    call NUOPC_CompAttributeGet(gcomp, name='scol_lat', value=cvalue, isPresent=isPresent, rc=rc)
+    read(cvalue,*) scol_lon
+    call NUOPC_CompAttributeGet(gcomp, name='scol_lat', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) scmlat
-    end if
-    single_column_domainfile = 'null'
-    call NUOPC_CompAttributeGet(gcomp, name='single_column_domainfile', value=cvalue, isPresent=isPresent, rc=rc)
+    read(cvalue,*) scol_lat
+    call NUOPC_CompAttributeGet(gcomp, name='single_column_lnd_domainfile', value=single_column_lnd_domainfile, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       single_column_domainfile = trim(cvalue)
-    end if
-    if (scmlon > -900. .and. scmlat > -900. .and. trim(single_column_domainfile) /= 'null') then
+
+    if (scmlon > -900. .and. scmlat > -900. .and. trim(single_column_lnd_domainfile) /= 'null') then
        single_column = .true.
     else
        call abort_ice('single_column_domainfile cannot be null for single column mode')
     end if
 
-    if (single_column) then
-       call ice_mesh_create_scolumn(single_column_domainfile, ice_mesh, rc=rc)
+    if (scol_lon > -900. .and. scol_lat > -900.) then
+       call NUOPC_CompAttributeGet(gcomp, name='scol_ocnmask', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_mask
+       call NUOPC_CompAttributeGet(gcomp, name='scol_ocnfrac', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_frac
+       call NUOPC_CompAttributeGet(gcomp, name='scol_ni', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_ni
+       call NUOPC_CompAttributeGet(gcomp, name='scol_nj', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_nj
+
+       call ice_mesh_create_scolumn(scol_lon, scol_lat, ice_mesh, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       scol_valid = (scol_mask == 1)
        if (.not. scol_valid) then
           ! if single column is not valid - set all export state fields to zero and return
-          write(nu_diag,'(a)')' single column mode point does not contain any ocn - will set all export data to 0'
+          write(nu_diag,'(a)')' (ice_comp_nuopc) single column mode point does not contain any ocn/ice '&
+               //' - setting all export data to 0'
           call ice_realize_fields(importState, exportState, mesh=ice_mesh, &
                flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          ! call State_SetScalar(1._r8, flds_scalar_index_nx, exportState, flds_scalar_name, flds_scalar_num, rc)
-          ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          ! call State_SetScalar(1._r8, flds_scalar_index_ny, exportState, flds_scalar_name, flds_scalar_num, rc)
-          ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
           call ESMF_StateGet(exportState, itemCount=fieldCount, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
           allocate(lfieldnamelist(fieldCount))
@@ -339,9 +346,17 @@ contains
              if (trim(lfieldnamelist(n)) /= flds_scalar_name) then
                 call ESMF_StateGet(exportState, itemName=trim(lfieldnamelist(n)), field=lfield, rc=rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
-                call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
-                if (ChkErr(rc,__LINE__,u_FILE_u)) return
-                fldptr(:) = 0._r8
+                call ESMF_FieldGet(lfield, rank=rank, rc=rc)
+                if (chkerr(rc,__LINE__,u_FILE_u)) return
+                if (rank == 2) then
+                   call ESMF_FieldGet(lfield, farrayPtr=fldptr2d, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   fldptr2d(:,:) = 0._r8
+                else
+                   call ESMF_FieldGet(lfield, farrayPtr=fldptr1d, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   fldptr1d(:) = 0._r8
+                end if
              end if
           enddo
           deallocate(lfieldnamelist)
@@ -350,7 +365,7 @@ contains
           ! *******************
           RETURN
        else
-          write(nu_diag,'(a,f10.5)')' single column mode lon/lat does contain ocn with ocn fraction ',scol_frac
+          write(nu_diag,'(a,3(f10.5,2x))')' (ice_comp_nuopc) single column mode lon/lat/frac is ',scmlon,scmlat,scol_frac
        end if
     end if
 

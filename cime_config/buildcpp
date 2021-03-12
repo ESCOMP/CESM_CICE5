@@ -44,12 +44,19 @@ def buildcpp(case):
     # reflect changes in the configuration this will trigger
     cice_auto_decomp = case.get_value("CICE_AUTO_DECOMP")
 
-    pts_mode = case.get_value("PTS_MODE")
-    # set cice mode and cice_config_opts
-    cice_mode = case.get_value("CICE_MODE")
+    driver = case.get_value("COMP_INTERFACE")
+    if driver == 'mct':
+        single_column = case.get_value("PTS_MODE")
+    elif driver == 'nuopc':
+        scol_lon = float(case.get_value('PTS_LON'))
+        scol_lat = float(case.get_value('PTS_LAT'))
+        if scol_lon > -999. and scol_lat > -999. and case.get_value("ATM_DOMAIN_FILE") != "UNSET":
+            single_column = True
+        else:
+            single_column = False
 
-    if pts_mode:
-        # explicitl set values for single column mode
+    if single_column:
+        # explicitly set values for single column mode
         nx = 1
         ny = 1
         cice_auto_decomp = False
@@ -58,6 +65,9 @@ def buildcpp(case):
         case.set_value("CICE_MXBLCKS", 1)
         case.set_value("CICE_DECOMPTYPE", "cartesian")
         case.set_value("CICE_DECOMPSETTING", "square-ice")
+
+    # set cice mode and cice_config_opts
+    cice_mode = case.get_value("CICE_MODE")
 
     if cice_auto_decomp:
         nthrds_ice = case.get_value("NTHRDS_ICE")
@@ -92,7 +102,7 @@ def buildcpp(case):
     elif "cice4" in cice_config_opts:
         phys = "cice4"
 
-    if cice_mode == 'prescribed' and not pts_mode:
+    if cice_mode == 'prescribed' and not single_column:
         case.set_value("CICE_DECOMPTYPE", "roundrobin")
 
     if cice_mode == 'prescribed':
