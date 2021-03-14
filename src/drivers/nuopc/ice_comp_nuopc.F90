@@ -284,6 +284,7 @@ contains
     integer                 :: n
     real(r8)                :: scol_lon
     real(r8)                :: scol_lat
+    real(r8)                :: scol_spval
     integer                 :: rank
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
@@ -303,16 +304,19 @@ contains
     call NUOPC_CompAttributeGet(gcomp, name='scol_lat', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) scol_lat
-    call NUOPC_CompAttributeGet(gcomp, name='single_column_lnd_domainfile', value=single_column_lnd_domainfile, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='scol_spval', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) scol_spval
 
-    if (scmlon > -900. .and. scmlat > -900. .and. trim(single_column_lnd_domainfile) /= 'null') then
-       single_column = .true.
-    else
-       call abort_ice('single_column_domainfile cannot be null for single column mode')
-    end if
-
-    if (scol_lon > -900. .and. scol_lat > -900.) then
+    if (scmlon > scol_spval .and. scmlat > scol_spval) then
+       call NUOPC_CompAttributeGet(gcomp, name='single_column_lnd_domainfile', &
+            value=single_column_lnd_domainfile, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (trim(single_column_lnd_domainfile) /= 'UNSET') then
+          single_column = .true.
+       else
+          call abort_ice('single_column_domainfile cannot be null for single column mode')
+       end if
        call NUOPC_CompAttributeGet(gcomp, name='scol_ocnmask', value=cvalue, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        read(cvalue,*) scol_mask
@@ -365,7 +369,8 @@ contains
           ! *******************
           RETURN
        else
-          write(nu_diag,'(a,3(f10.5,2x))')' (ice_comp_nuopc) single column mode lon/lat/frac is ',scmlon,scmlat,scol_frac
+          write(nu_diag,'(a,3(f10.5,2x))')' (ice_comp_nuopc) single column mode lon/lat/frac is ',&
+               scmlon,scmlat,scol_frac
        end if
     end if
 
