@@ -300,10 +300,10 @@ contains
 
     call NUOPC_CompAttributeGet(gcomp, name='scol_lon', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) scol_lon
+    read(cvalue,*) scmlon
     call NUOPC_CompAttributeGet(gcomp, name='scol_lat', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) scol_lat
+    read(cvalue,*) scmlat
     call NUOPC_CompAttributeGet(gcomp, name='scol_spval', value=cvalue, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) scol_spval
@@ -330,7 +330,7 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        read(cvalue,*) scol_nj
 
-       call ice_mesh_create_scolumn(scol_lon, scol_lat, ice_mesh, rc)
+       call ice_mesh_create_scolumn(scmlon, scmlat, ice_mesh, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        scol_valid = (scol_mask == 1)
