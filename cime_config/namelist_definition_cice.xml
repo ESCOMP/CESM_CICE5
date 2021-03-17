@@ -650,7 +650,8 @@
       input file for CICE grid info
     </desc>
     <values>
-      <value cice_mode="prescribed">$ICE_DOMAIN_PATH/$ICE_DOMAIN_FILE</value>
+      <value>UNSET</value>
+      <value cice_mode="prescribed" driver="mct">$ICE_DOMAIN_PATH/$ICE_DOMAIN_FILE</value>
       <value hgrid="gx1v6">$DIN_LOC_ROOT/ocn/pop/gx1v6/grid/horiz_grid_20010402.ieeer8</value>
       <value hgrid="gx1v7">$DIN_LOC_ROOT/ocn/pop/gx1v7/grid/horiz_grid_20010402.ieeer8</value>
       <value hgrid="gx3v7">$DIN_LOC_ROOT/ocn/pop/gx3v7/grid/horiz_grid_20030806.ieeer8</value>
@@ -674,7 +675,8 @@
       input file for CICE grid info
     </desc>
     <values>
-      <value cice_mode="prescribed">$ICE_DOMAIN_PATH/$ICE_DOMAIN_FILE</value>
+      <value>UNSET</value> 
+      <value cice_mode="prescribed" driver="mct">$ICE_DOMAIN_PATH/$ICE_DOMAIN_FILE</value>
       <value hgrid="gx1v6">$DIN_LOC_ROOT/ocn/pop/gx1v6/grid/topography_20090204.ieeei4</value>
       <value hgrid="gx1v7">$DIN_LOC_ROOT/ocn/pop/gx1v7/grid/topography_20161215.ieeei4</value>
       <value hgrid="gx3v7">$DIN_LOC_ROOT/ocn/pop/gx3v7/grid/topography_20100105.ieeei4</value>

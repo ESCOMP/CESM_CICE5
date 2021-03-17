@@ -252,12 +252,14 @@ contains
 
 !==============================================================================
 
-  subroutine ice_realize_fields(gcomp, mesh, grid, flds_scalar_name, flds_scalar_num, rc)
+  subroutine ice_realize_fields(importState, exportState,  mesh, grid, flds_scalar_name, flds_scalar_num, rc)
 
     use ice_constants, only : radius
+    use shr_mpi_mod  , only : shr_mpi_min, shr_mpi_max
 
     ! input/output variables
-    type(ESMF_GridComp)                      :: gcomp
+    type(ESMF_State)      :: importState
+    type(ESMF_State)      :: exportState
     type(ESMF_Mesh) , optional , intent(in)  :: mesh
     type(ESMF_Grid) , optional , intent(in)  :: grid
     character(len=*)           , intent(in)  :: flds_scalar_name
@@ -265,8 +267,6 @@ contains
     integer                    , intent(out) :: rc
 
     ! local variables
-    type(ESMF_State)      :: importState
-    type(ESMF_State)      :: exportState
     type(ESMF_Field)      :: lfield
     integer               :: numOwnedElements
     integer               :: i, j, iblk, n
@@ -275,13 +275,18 @@ contains
     real(r8), allocatable :: mesh_areas(:)
     real(r8), allocatable :: model_areas(:)
     real(r8), pointer     :: dataptr(:)
+    real(r8)              :: max_mod2med_areacor
+    real(r8)              :: max_med2mod_areacor
+    real(r8)              :: min_mod2med_areacor
+    real(r8)              :: min_med2mod_areacor
+    real(r8)              :: max_mod2med_areacor_glob
+    real(r8)              :: max_med2mod_areacor_glob
+    real(r8)              :: min_mod2med_areacor_glob
+    real(r8)              :: min_med2mod_areacor_glob
     character(len=*), parameter :: subname='(ice_import_export:realize_fields)'
     !---------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
-
-    call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call fldlist_realize( &
          state=ExportState, &
@@ -315,8 +320,12 @@ contains
     allocate(mesh_areas(numOwnedElements))
     mesh_areas(:) = dataptr(:)
 
-    ! Determine model areas
+    ! Determine flux correction factors (module variables)
     allocate(model_areas(numOwnedElements))
+    allocate(mod2med_areacor(numOwnedElements))
+    allocate(med2mod_areacor(numOwnedElements))
+    mod2med_areacor(:) = 1._r8
+    med2mod_areacor(:) = 1._r8
     n = 0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)
@@ -328,28 +337,29 @@ contains
           do i = ilo, ihi
              n = n+1
              model_areas(n) = tarea(i,j,iblk)/(radius*radius)
+             mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
+             med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
           enddo
        enddo
     enddo
-
-    ! Determine flux correction factors (module variables)
-    allocate (mod2med_areacor(numOwnedElements))
-    allocate (med2mod_areacor(numOwnedElements))
-    do n = 1,numOwnedElements
-       if (model_areas(n) == mesh_areas(n)) then
-          mod2med_areacor(n) = 1._r8
-          med2mod_areacor(n) = 1._r8
-       else
-          mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
-          med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
-          if (abs(mod2med_areacor(n) - 1._r8) > 1.e-13) then
-             write(6,'(a,i8,2x,d21.14,2x)')' AREACOR cice5: n, abs(mod2med_areacor(n)-1)', &
-                  n, abs(mod2med_areacor(n) - 1._r8)
-          end if
-       end if
-    end do
     deallocate(model_areas)
     deallocate(mesh_areas)
+
+    min_mod2med_areacor = minval(mod2med_areacor)
+    max_mod2med_areacor = maxval(mod2med_areacor)
+    min_med2mod_areacor = minval(med2mod_areacor)
+    max_med2mod_areacor = maxval(med2mod_areacor)
+    call shr_mpi_max(max_mod2med_areacor, max_mod2med_areacor_glob, mpi_comm_ice)
+    call shr_mpi_min(min_mod2med_areacor, min_mod2med_areacor_glob, mpi_comm_ice)
+    call shr_mpi_max(max_med2mod_areacor, max_med2mod_areacor_glob, mpi_comm_ice)
+    call shr_mpi_min(min_med2mod_areacor, min_med2mod_areacor_glob, mpi_comm_ice)
+
+    if (my_task == master_task) then
+       write(nu_diag,'(2A,2g23.15,A )') trim(subname),' :  min_mod2med_areacor, max_mod2med_areacor ',&
+            min_mod2med_areacor_glob, max_mod2med_areacor_glob, 'CICE5'
+       write(nu_diag,'(2A,2g23.15,A )') trim(subname),' :  min_med2mod_areacor, max_med2mod_areacor ',&
+            min_med2mod_areacor_glob, max_med2mod_areacor_glob, 'CICE5'
+    end if
 
   end subroutine ice_realize_fields
 
@@ -540,7 +550,7 @@ contains
        ! bcphodry  ungridded_index=2
        ! bcphiwet  ungridded_index=3
 
-       call state_getfldptr(importState, 'Faxa_bcph', dataPtr2d, rc=rc)
+       call state_getfldptr(importState, 'Faxa_bcph', dataPtr2d, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        n = 0
        do iblk = 1, nblocks
@@ -559,9 +569,9 @@ contains
 
     ! Sum over all dry and wet dust fluxes from ath atmosphere
     if (State_FldChk(importState, 'Faxa_dstwet') .and. State_FldChk(importState, 'Faxa_dstdry')) then
-       call state_getfldptr(importState, 'Faxa_dstwet', dataPtr2d_dstwet, rc=rc)
+       call state_getfldptr(importState, 'Faxa_dstwet', dataPtr2d_dstwet, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call state_getfldptr(importState, 'Faxa_dstdry', dataPtr2d_dstdry, rc=rc)
+       call state_getfldptr(importState, 'Faxa_dstdry', dataPtr2d_dstdry, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        n = 0
        do iblk = 1, nblocks
@@ -947,6 +957,7 @@ contains
        call state_setexport(exportState, 'Faii_swnet' , input=fswabs, lmask=tmask, ifrac=ailohi, &
             areacor=mod2med_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     end if
 
     ! ------
@@ -989,7 +1000,7 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! salt to ocean (salt flux from melting)
-    call state_setexport(exportState, 'mean_salt_rate' , input=fresh, lmask=tmask, ifrac=ailohi, &
+    call state_setexport(exportState, 'mean_salt_rate' , input=fsalt, lmask=tmask, ifrac=ailohi, &
          areacor=mod2med_areacor, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -1036,6 +1047,7 @@ contains
        ! 16O => ungridded_index=1
        ! 18O => ungridded_index=2
        ! HDO => ungridded_index=3
+
        call state_setexport(exportState, 'mean_fresh_water_to_ocean_rate_wiso' , input=fiso_ocn, index=1, &
             lmask=tmask, ifrac=ailohi, ungridded_index=3, areacor=mod2med_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1448,6 +1460,7 @@ contains
     integer                      :: i, j, iblk, n, i1, j1 ! indices
     real(kind=dbl_kind), pointer :: dataPtr1d(:)          ! mesh
     real(kind=dbl_kind), pointer :: dataPtr2d(:,:)        ! mesh
+    integer                      :: ice_num
     character(len=*), parameter  :: subname='(ice_import_export:state_setexport)'
     ! ----------------------------------------------
 
@@ -1483,9 +1496,10 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr2d,dim=2)
-             dataPtr2d(:,n) = dataPtr2d(:,n) * areacor(n)
+          do n = 1,ice_num
+             dataPtr2d(ungridded_index,n) = dataPtr2d(ungridded_index,n) * areacor(n)
           end do
        end if
     else
@@ -1513,8 +1527,9 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr1d)
+          do n = 1,ice_num
              dataPtr1d(n) = dataPtr1d(n) * areacor(n)
           end do
        end if
@@ -1546,6 +1561,7 @@ contains
     integer                      :: i, j, iblk, n, i1, j1 ! incides
     real(kind=dbl_kind), pointer :: dataPtr1d(:)          ! mesh
     real(kind=dbl_kind), pointer :: dataPtr2d(:,:)        ! mesh
+    integer                      :: ice_num
     character(len=*), parameter  :: subname='(ice_import_export:state_setexport)'
     ! ----------------------------------------------
 
@@ -1579,9 +1595,10 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr2d,dim=2)
-             dataPtr2d(:,n) = dataPtr2d(:,n) * areacor(n)
+          do n = 1,ice_num
+             dataPtr2d(ungridded_index,n) = dataPtr2d(ungridded_index,n) * areacor(n)
           end do
        end if
     else
@@ -1611,8 +1628,9 @@ contains
              end do
           end if
        end do
+       ice_num = n
        if (present(areacor)) then
-          do n = 1,size(dataptr1d)
+          do n = 1,ice_num
              dataPtr1d(n) = dataPtr1d(n) * areacor(n)
           end do
        end if

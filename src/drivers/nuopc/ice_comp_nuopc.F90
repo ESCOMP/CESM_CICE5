@@ -15,8 +15,7 @@ module ice_comp_nuopc
   use NUOPC_Model            , only : model_label_SetRunClock    => label_SetRunClock
   use NUOPC_Model            , only : model_label_Finalize       => label_Finalize
   use NUOPC_Model            , only : NUOPC_ModelGet, SetVM
-  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs 
-  use shr_sys_mod            , only : shr_sys_abort
+  use shr_kind_mod           , only : r8 => shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs
   use shr_file_mod           , only : shr_file_getlogunit, shr_file_setlogunit
   use shr_orb_mod            , only : shr_orb_decl, shr_orb_params, SHR_ORB_UNDEF_REAL, SHR_ORB_UNDEF_INT
   use shr_cal_mod            , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
@@ -30,7 +29,7 @@ module ice_comp_nuopc
   use ice_calendar           , only : sec, dt, calendar, calendar_type, nextsw_cday, istep
   use ice_orbital            , only : eccen, obliqr, lambm0, mvelpp
   use ice_kinds_mod          , only : dbl_kind, int_kind
-  use ice_scam               , only : scmlat, scmlon, single_column
+  use ice_scam               , only : scmlat, scmlon, scol_mask, scol_frac, scol_ni, scol_nj, scol_valid, single_column
   use ice_fileunits          , only : nu_diag, inst_index, inst_name, inst_suffix, release_all_fileunits
   use ice_ocean              , only : tfrz_option
   use ice_therm_shared       , only : ktherm
@@ -41,7 +40,9 @@ module ice_comp_nuopc
   use ice_atmo               , only : flux_convergence_tolerance, flux_convergence_max_iteration
   use ice_atmo               , only : use_coldair_outbreak_mod
   use ice_mesh_mod           , only : ice_mesh_set_distgrid, ice_mesh_setmask_from_maskfile, ice_mesh_check
+  use ice_mesh_mod           , only : ice_mesh_init_tlon_tlat_area_hm, ice_mesh_create_scolumn
   use ice_grid               , only : init_grid2, grid_type
+  use ice_exit               , only : abort_ice
   use CICE_InitMod           , only : CICE_Init1, CICE_Init2
   use CICE_RunMod            , only : CICE_Run
   use perf_mod               , only : t_startf, t_stopf, t_barrierf
@@ -181,7 +182,7 @@ contains
        call ESMF_LogWrite(trim(subname)//' flds_scalar_name = '//trim(flds_scalar_name), ESMF_LOGMSG_INFO)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldName')
+       call abort_ice(subname//'Need to set attribute ScalarFieldName')
     endif
 
     call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldCount", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -192,7 +193,7 @@ contains
        call ESMF_LogWrite(trim(subname)//' flds_scalar_num = '//trim(logmsg), ESMF_LOGMSG_INFO)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldCount')
+       call abort_ice(subname//'Need to set attribute ScalarFieldCount')
     endif
 
     call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNX", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -203,7 +204,7 @@ contains
        call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_nx = '//trim(logmsg), ESMF_LOGMSG_INFO)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxGridNX')
+       call abort_ice(subname//'Need to set attribute ScalarFieldIdxGridNX')
     endif
 
     call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNY", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -214,7 +215,7 @@ contains
        call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_ny = '//trim(logmsg), ESMF_LOGMSG_INFO)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxGridNY')
+       call abort_ice(subname//'Need to set attribute ScalarFieldIdxGridNY')
     endif
 
     call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxNextSwCday", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -225,7 +226,7 @@ contains
        call ESMF_LogWrite(trim(subname)//' : flds_scalar_index_nextsw_cday = '//trim(logmsg), ESMF_LOGMSG_INFO)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
-       call shr_sys_abort(subname//'Need to set attribute ScalarFieldIdxNextSwCday')
+       call abort_ice(subname//'Need to set attribute ScalarFieldIdxNextSwCday')
     endif
 
     call ice_advertise_fields(gcomp, importState, exportState, flds_scalar_name, rc)
@@ -256,7 +257,6 @@ contains
     type(ESMF_Time)         :: stopTime           ! Stop time
     type(ESMF_Time)         :: refTime            ! Ref time
     type(ESMF_TimeInterval) :: timeStep           ! Model timestep
-    type(ESMF_Calendar)     :: esmf_calendar      ! esmf calendar
     type(ESMF_CalKind_Flag) :: esmf_caltype       ! esmf calendar type
     integer                 :: start_ymd          ! Start date (YYYYMMDD)
     integer                 :: start_tod          ! start time of day (s)
@@ -271,16 +271,108 @@ contains
     integer                 :: dtime              ! time step
     integer                 :: shrlogunit         ! original log unit
     character(len=cs)       :: starttype          ! infodata start type
-    character(CL)           :: cvalue
     logical                 :: isPresent
+    character(CL)           :: cvalue
+    character(CL)           :: single_column_lnd_domainfile
     character(len=CL)       :: ice_meshfile
     character(len=CL)       :: ice_maskfile
+    type(ESMF_Field)        :: lfield
+    character(CL) ,pointer  :: lfieldnamelist(:) => null()
+    integer                 :: fieldcount
+    real(r8), pointer       :: fldptr1d(:)
+    real(r8), pointer       :: fldptr2d(:,:)
+    integer                 :: n
+    real(r8)                :: scol_lon
+    real(r8)                :: scol_lat
+    real(r8)                :: scol_spval
+    integer                 :: rank
     character(*), parameter     :: F00   = "('(ice_comp_nuopc) ',2a,1x,d21.14)"
     character(len=*), parameter :: subname=trim(modName)//':(InitializeRealize) '
     !--------------------------------
 
     rc = ESMF_SUCCESS
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
+
+    !----------------------------------------------------------------------------
+    ! Single column logic - if mask is zero for nearest neighbor search then 
+    ! set all export state fields to zero and return
+    !----------------------------------------------------------------------------
+
+    call NUOPC_CompAttributeGet(gcomp, name='scol_lon', value=cvalue, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) scmlon
+    call NUOPC_CompAttributeGet(gcomp, name='scol_lat', value=cvalue, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) scmlat
+    call NUOPC_CompAttributeGet(gcomp, name='scol_spval', value=cvalue, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    read(cvalue,*) scol_spval
+
+    if (scmlon > scol_spval .and. scmlat > scol_spval) then
+       call NUOPC_CompAttributeGet(gcomp, name='single_column_lnd_domainfile', &
+            value=single_column_lnd_domainfile, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (trim(single_column_lnd_domainfile) /= 'UNSET') then
+          single_column = .true.
+       else
+          call abort_ice('single_column_domainfile cannot be null for single column mode')
+       end if
+       call NUOPC_CompAttributeGet(gcomp, name='scol_ocnmask', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_mask
+       call NUOPC_CompAttributeGet(gcomp, name='scol_ocnfrac', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_frac
+       call NUOPC_CompAttributeGet(gcomp, name='scol_ni', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_ni
+       call NUOPC_CompAttributeGet(gcomp, name='scol_nj', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       read(cvalue,*) scol_nj
+
+       call ice_mesh_create_scolumn(scmlon, scmlat, ice_mesh, rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       scol_valid = (scol_mask == 1)
+       if (.not. scol_valid) then
+          ! if single column is not valid - set all export state fields to zero and return
+          write(nu_diag,'(a)')' (ice_comp_nuopc) single column mode point does not contain any ocn/ice '&
+               //' - setting all export data to 0'
+          call ice_realize_fields(importState, exportState, mesh=ice_mesh, &
+               flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_StateGet(exportState, itemCount=fieldCount, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          allocate(lfieldnamelist(fieldCount))
+          call ESMF_StateGet(exportState, itemNameList=lfieldnamelist, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          do n = 1, fieldCount
+             if (trim(lfieldnamelist(n)) /= flds_scalar_name) then
+                call ESMF_StateGet(exportState, itemName=trim(lfieldnamelist(n)), field=lfield, rc=rc)
+                if (chkerr(rc,__LINE__,u_FILE_u)) return
+                call ESMF_FieldGet(lfield, rank=rank, rc=rc)
+                if (chkerr(rc,__LINE__,u_FILE_u)) return
+                if (rank == 2) then
+                   call ESMF_FieldGet(lfield, farrayPtr=fldptr2d, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   fldptr2d(:,:) = 0._r8
+                else
+                   call ESMF_FieldGet(lfield, farrayPtr=fldptr1d, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   fldptr1d(:) = 0._r8
+                end if
+             end if
+          enddo
+          deallocate(lfieldnamelist)
+          ! *******************
+          ! *** RETURN HERE ***
+          ! *******************
+          RETURN
+       else
+          write(nu_diag,'(a,3(f10.5,2x))')' (ice_comp_nuopc) single column mode lon/lat/frac is ',&
+               scmlon,scmlat,scol_frac
+       end if
+    end if
 
     !----------------------------------------------------------------------------
     ! generate local mpi comm
@@ -304,7 +396,7 @@ contains
     call get_component_instance(gcomp, inst_suffix, inst_index, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    inst_name = "ICE"//trim(inst_suffix)
+    inst_name = "ICE"
 
     !----------------------------------------------------------------------------
     ! start cice timers
@@ -340,7 +432,7 @@ contains
        else if (trim(starttype) == trim('branch')) then
           runtype = "continue"
        else
-          call shr_sys_abort( subname//' ERROR: unknown starttype' )
+          call abort_ice( subname//' ERROR: unknown starttype' )
        end if
 
        ! Note that in the mct version the atm was initialized first so that nextsw_cday could be passed to the other
@@ -348,7 +440,7 @@ contains
        ! In the nuopc version it will be easier to assume that on startup - nextsw_cday is just the current time
 
        ! TOOD (mvertens, 2019-03-21): need to get the perpetual run working
-     
+
        if (trim(runtype) /= 'initial') then
           ! Set nextsw_cday to -1 (this will skip an orbital calculation on initialization
           nextsw_cday = -1.0_r8
@@ -360,28 +452,10 @@ contains
        end if
     else
        ! This would be the NEMS branch
-       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is 
+       ! Note that in NEMS - nextsw_cday is not needed in ice_orbital.F90 and what is needed is
        ! simply a CPP variable declaratino of NEMSCOUPLED
 
        runtype = 'initial' ! determined from the namelist in ice_init if CESMCOUPLED is not defined
-    end if
-
-    ! Determine single column info
-    call NUOPC_CompAttributeGet(gcomp, name='single_column', value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) single_column
-    else
-       single_column = .false.
-    end if
-    if (single_column) then
-       ! Must have these attributes present
-       call NUOPC_CompAttributeGet(gcomp, name='scmlon', value=cvalue, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) scmlon
-       call NUOPC_CompAttributeGet(gcomp, name='scmlat', value=cvalue, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) scmlat
     end if
 
     ! Determine runid
@@ -459,7 +533,7 @@ contains
     else if (esmf_caltype == ESMF_CALKIND_GREGORIAN) then
        calendar_type = shr_cal_gregorian
     else
-       call shr_sys_abort( subname//'ERROR:: bad calendar for ESMF' )
+       call abort_ice( subname//'ERROR:: bad calendar for ESMF' )
     end if
 
     !----------------------------------------------------------------------------
@@ -478,53 +552,54 @@ contains
     ! Initialize cice1
     !----------------------------------------------------------------------------
 
-    !call t_startf ('cice_init1')
     call cice_init1()
-    !call t_stopf ('cice_init1')
 
     !----------------------------------------------------------------------------
     ! Initialize grid info
     !----------------------------------------------------------------------------
 
     ! Initialize cice mesh and mask if appropriate
-    !call t_startf ('cice_initgrid')
 
-    ! Determine mesh input file
-    call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=ice_meshfile, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    ! Determine mask input file
-    call NUOPC_CompAttributeGet(gcomp, name='mesh_mask', value=ice_maskfile, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    if (my_task == master_task) then
-       write(nu_diag,*)'mesh file for cice domain is ',trim(ice_meshfile)
-       write(nu_diag,*)'mask file for cice domain is ',trim(ice_maskfile)
-    end if
-
-    ! Determine the model distgrid using the decomposition obtained in
-    ! call to init_grid1 called from cice_init1
-    call ice_mesh_set_distgrid(localpet, npes, ice_distgrid, rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    ! Read in the ice mesh on the cice distribution
-    ice_mesh = ESMF_MeshCreate(filename=trim(ice_meshfile), fileformat=ESMF_FILEFORMAT_ESMFMESH, &
-         elementDistGrid=ice_distgrid, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    ! Initialize the cice mesh and the cice mask
-    if (trim(grid_type) == 'setmask') then
-       ! In this case cap code determines the mask file
-       call ice_mesh_setmask_from_maskfile(ice_mesh, ice_maskfile, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (single_column .and. scol_valid) then
+       call ice_mesh_init_tlon_tlat_area_hm()
     else
-       ! In this case init_grid2 will initialize tlon, tlat, area and hm
-       call init_grid2()  
-       call ice_mesh_check(ice_mesh, rc=rc)
+       ! Determine mesh input file
+       call NUOPC_CompAttributeGet(gcomp, name='mesh_ice', value=ice_meshfile, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
 
-    !call t_stopf ('cice_initgrid')
+       ! Determine mask input file
+       call NUOPC_CompAttributeGet(gcomp, name='mesh_mask', value=ice_maskfile, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       
+       if (my_task == master_task) then
+          write(nu_diag,*)'mesh file for cice domain is ',trim(ice_meshfile)
+          write(nu_diag,*)'mask file for cice domain is ',trim(ice_maskfile)
+       end if
+       
+       ! Determine the model distgrid using the decomposition obtained in
+       ! call to init_grid1 called from cice_init1
+       call ice_mesh_set_distgrid(localpet, npes, ice_distgrid, rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       
+       ! Read in the ice mesh on the cice distribution
+       ice_mesh = ESMF_MeshCreate(filename=trim(ice_meshfile), fileformat=ESMF_FILEFORMAT_ESMFMESH, &
+            elementDistGrid=ice_distgrid, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       
+       ! Initialize the cice mesh and the cice mask
+       if (trim(grid_type) == 'setmask') then
+          ! In this case cap code determines the mask file
+          call ice_mesh_setmask_from_maskfile(ice_maskfile, ice_mesh, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          call ice_mesh_init_tlon_tlat_area_hm()
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       else
+          ! In this case init_grid2 will initialize tlon, tlat, area and hm
+          call init_grid2()
+          call ice_mesh_check(ice_mesh, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
+    end if
 
     !----------------------------------------------------------------------------
     ! Initialize cice2
@@ -532,7 +607,7 @@ contains
 
     ! Note that cice_init2 also sets time manager info as well as mpi communicator info,
     ! including master_task and my_task
-    !call t_startf ('cice_init2')
+    ! call t_startf ('cice_init2')
     call cice_init2()
     !call t_stopf ('cice_init2')
 
@@ -587,7 +662,7 @@ contains
              write(nu_diag,*) trim(subname),' ERROR curr_ymd,year_init =',curr_ymd,year_init
              write(nu_diag,*) trim(subname),' ERROR idate lt zero',idate
           end if
-          call shr_sys_abort(subname//' :: ERROR idate lt zero')
+          call abort_ice(subname//' :: ERROR idate lt zero')
        endif
        iyear = (idate/10000)                     ! integer year of basedate
        month = (idate-iyear*10000)/100           ! integer month of basedate
@@ -617,7 +692,7 @@ contains
     ! Realize the actively coupled fields
     !-----------------------------------------------------------------
 
-    call ice_realize_fields(gcomp, mesh=ice_mesh, &
+    call ice_realize_fields(importState, exportState, mesh=ice_mesh, &
          flds_scalar_name=flds_scalar_name, flds_scalar_num=flds_scalar_num, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -672,33 +747,41 @@ contains
     integer, intent(out) :: rc
 
     ! Local variables
-    type(ESMF_Clock)           :: clock
-    type(ESMF_Alarm)           :: alarm
-    type(ESMF_Time)            :: currTime
-    type(ESMF_Time)            :: nextTime
-    type(ESMF_State)           :: importState, exportState
-    character(ESMF_MAXSTR)     :: cvalue
-    integer                    :: shrlogunit ! original log unit
-    integer                    :: k,n        ! index
-    logical                    :: stop_now   ! .true. ==> stop at the end of this run phase
-    integer                    :: ymd        ! Current date (YYYYMMDD)
-    integer                    :: tod        ! Current time of day (sec)
-    integer                    :: curr_ymd   ! Current date (YYYYMMDD)
-    integer                    :: curr_tod   ! Current time of day (s)
-    integer                    :: yy,mm,dd   ! year, month, day, time of day
-    integer                    :: ymd_sync   ! Sync date (YYYYMMDD)
-    integer                    :: yr_sync    ! Sync current year
-    integer                    :: mon_sync   ! Sync current month
-    integer                    :: day_sync   ! Sync current day
-    integer                    :: tod_sync   ! Sync current time of day (sec)
-    character(CL)              :: restart_date
-    character(CL)              :: restart_filename
+    type(ESMF_Clock)       :: clock
+    type(ESMF_Alarm)       :: alarm
+    type(ESMF_Time)        :: currTime
+    type(ESMF_Time)        :: nextTime
+    type(ESMF_State)       :: importState, exportState
+    character(CL)          :: cvalue
+    integer                :: shrlogunit ! original log unit
+    integer                :: k,n        ! index
+    logical                :: stop_now   ! .true. ==> stop at the end of this run phase
+    integer                :: ymd        ! Current date (YYYYMMDD)
+    integer                :: tod        ! Current time of day (sec)
+    integer                :: curr_ymd   ! Current date (YYYYMMDD)
+    integer                :: curr_tod   ! Current time of day (s)
+    integer                :: yy,mm,dd   ! year, month, day, time of day
+    integer                :: ymd_sync   ! Sync date (YYYYMMDD)
+    integer                :: yr_sync    ! Sync current year
+    integer                :: mon_sync   ! Sync current month
+    integer                :: day_sync   ! Sync current day
+    integer                :: tod_sync   ! Sync current time of day (sec)
+    character(CL)          :: restart_date
+    character(CL)          :: restart_filename
     character(*)   , parameter :: F00   = "('(ice_comp_nuopc) ',2a,i8,d21.14)"
-    character(len=*),parameter  :: subname=trim(modName)//':(ModelAdvance) '
+    character(len=*),parameter :: subname=trim(modName)//':(ModelAdvance) '
     !--------------------------------
 
     rc = ESMF_SUCCESS
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
+
+    !--------------------------------
+    ! Single column logic if nearest neighbor point has a mask of zero
+    !--------------------------------
+
+    if (single_column .and. .not. scol_valid) then
+       RETURN
+    end if
 
     !--------------------------------
     ! Turn on timers
@@ -1037,7 +1120,7 @@ contains
     ! input/output variables
     type(ESMF_GridComp)                 :: gcomp
     integer             , intent(in)    :: logunit
-    logical             , intent(in)    :: mastertask 
+    logical             , intent(in)    :: mastertask
     integer             , intent(out)   :: rc              ! output error
 
     ! local variables
@@ -1131,12 +1214,12 @@ contains
   subroutine cice_orbital_update(clock, logunit,  mastertask, eccen, obliqr, lambm0, mvelpp, rc)
 
     !----------------------------------------------------------
-    ! Update orbital settings 
+    ! Update orbital settings
     !----------------------------------------------------------
 
     ! input/output variables
     type(ESMF_Clock) , intent(in)    :: clock
-    integer          , intent(in)    :: logunit 
+    integer          , intent(in)    :: logunit
     logical          , intent(in)    :: mastertask
     real(R8)         , intent(inout) :: eccen  ! orbital eccentricity
     real(R8)         , intent(inout) :: obliqr ! Earths obliquity in rad
@@ -1146,7 +1229,7 @@ contains
 
     ! local variables
     type(ESMF_Time)   :: CurrTime ! current time
-    integer           :: year     ! model year at current time 
+    integer           :: year     ! model year at current time
     integer           :: orb_year ! orbital year for current orbital computation
     character(len=CL) :: msgstr   ! temporary
     logical           :: lprint
@@ -1162,7 +1245,7 @@ contains
        orb_year = orb_iyear + (year - orb_iyear_align)
        lprint = mastertask
     else
-       orb_year = orb_iyear 
+       orb_year = orb_iyear
        if (first_time) then
           lprint = mastertask
           first_time = .false.
