@@ -372,6 +372,8 @@ contains
           write(nu_diag,'(a,3(f10.5,2x))')' (ice_comp_nuopc) single column mode lon/lat/frac is ',&
                scmlon,scmlat,scol_frac
        end if
+    else
+       single_column = .false.
     end if
 
     !----------------------------------------------------------------------------
