@@ -469,37 +469,6 @@ contains
        runid = 'unknown'  ! read in from the namelist in ice_init.F90 if CESMCOUPLED is not defined
     end if
 
-    ! Determine tfreeze_option, flux convertence before call to cice_init
-    call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (.not. isPresent) then
-       tfrz_option = 'linear_salt'  ! TODO: is this right? This must be the same as mom is using for the calculation.
-    end if
-
-    call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) flux_convergence_tolerance
-    else
-       flux_convergence_tolerance = 0._r8
-    end if
-
-    call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) flux_convergence_max_iteration
-    else
-       flux_convergence_max_iteration = 5
-    end if
-
-    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak_mod", value=cvalue, isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       read(cvalue,*) use_coldair_outbreak_mod
-    else
-       use_coldair_outbreak_mod = .false.
-    end if
-
     ! Get clock information before call to cice_init
 
     call ESMF_ClockGet( clock, &
@@ -612,6 +581,43 @@ contains
     ! call t_startf ('cice_init2')
     call cice_init2()
     !call t_stopf ('cice_init2')
+
+    !----------------------------------------------------------------------------
+    ! Overwrite input namelists with data coming from the driver
+    !----------------------------------------------------------------------------
+    ! NOTE: The following calls must occur AFTER the ice is initialized since it will overwrite
+
+    ! the input namelists
+    ! Determine tfreeze_option, flux convertence before call to cice_init
+    call NUOPC_CompAttributeGet(gcomp, name="tfreeze_option", value=tfrz_option, isPresent=isPresent, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (.not. isPresent) then
+       tfrz_option = 'linear_salt'  ! TODO: is this right? This must be the same as mom is using for the calculation.
+    end if
+
+    call NUOPC_CompAttributeGet(gcomp, name="coldair_outbreak_mod", value=cvalue, isPresent=isPresent, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       read(cvalue,*) use_coldair_outbreak_mod
+    else
+       use_coldair_outbreak_mod = .false.
+    end if
+
+    call NUOPC_CompAttributeGet(gcomp, name="flux_convergence", value=cvalue, isPresent=isPresent, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       read(cvalue,*) flux_convergence_tolerance
+    else
+       flux_convergence_tolerance = 0._r8
+    end if
+
+    call NUOPC_CompAttributeGet(gcomp, name="flux_max_iteration", value=cvalue, isPresent=isPresent, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       read(cvalue,*) flux_convergence_max_iteration
+    else
+       flux_convergence_max_iteration = 5
+    end if
 
     !----------------------------------------------------------------------------
     ! reset shr logging to my log file
