@@ -333,12 +333,13 @@
          j = indxj(ij)
 
          TsfK      = Tsf(i,j) + Tffresh     ! surface temp (K)
+         delt(i,j) = potT(i,j) - TsfK
+
          ! Cold Air Outbreak Modification:
          ! Increase windspeed for negative delt
          ! based on Mahrt & Sun 1995,MWR
          if (use_coldair_outbreak_mod) then
             ! Mahrt and Sun adjustment
-            delt(i,j) = potT(i,j) - TsfK
 
             if (delt(i,j).lt.td0) then
                vscl=min((c1+alpha*(abs(delt(i,j)-td0)**p5/abs(vmag(ij)))),maxscl)
