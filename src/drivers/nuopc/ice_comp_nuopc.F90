@@ -47,7 +47,7 @@ module ice_comp_nuopc
   use CICE_RunMod            , only : CICE_Run
   use perf_mod               , only : t_startf, t_stopf, t_barrierf
   use ice_timers
-
+!$ use OMP_LIB               , only : omp_set_num_threads
   implicit none
 
   public  :: SetServices
@@ -83,6 +83,8 @@ module ice_comp_nuopc
   character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
   character(len=*) , parameter :: orb_variable_year    = 'variable_year'
   character(len=*) , parameter :: orb_fixed_parameters = 'fixed_parameters'
+
+  integer                 :: nthrds   ! Number of threads to use in this component
 
 !=======================================================================
 contains
@@ -294,7 +296,7 @@ contains
     if (dbug > 5) call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
     !----------------------------------------------------------------------------
-    ! Single column logic - if mask is zero for nearest neighbor search then 
+    ! Single column logic - if mask is zero for nearest neighbor search then
     ! set all export state fields to zero and return
     !----------------------------------------------------------------------------
 
@@ -384,6 +386,15 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_VMGet(vm, pet=localPet, peCount=nthrds, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if(nthrds==1) then
+       call NUOPC_CompAttributeGet(gcomp, "nthreads", value=cvalue, rc=rc)
+       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
+       read(cvalue,*) nthrds
+    endif
+!$  call omp_set_num_threads(nthrds)
 
     !----------------------------------------------------------------------------
     ! Initialize cice communicators
@@ -541,22 +552,22 @@ contains
        ! Determine mask input file
        call NUOPC_CompAttributeGet(gcomp, name='mesh_mask', value=ice_maskfile, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       
+
        if (my_task == master_task) then
           write(nu_diag,*)'mesh file for cice domain is ',trim(ice_meshfile)
           write(nu_diag,*)'mask file for cice domain is ',trim(ice_maskfile)
        end if
-       
+
        ! Determine the model distgrid using the decomposition obtained in
        ! call to init_grid1 called from cice_init1
        call ice_mesh_set_distgrid(localpet, npes, ice_distgrid, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       
+
        ! Read in the ice mesh on the cice distribution
        ice_mesh = ESMF_MeshCreate(filename=trim(ice_meshfile), fileformat=ESMF_FILEFORMAT_ESMFMESH, &
             elementDistGrid=ice_distgrid, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       
+
        ! Initialize the cice mesh and the cice mask
        if (trim(grid_type) == 'setmask') then
           ! In this case cap code determines the mask file
@@ -798,6 +809,7 @@ contains
     call ice_timer_start(timer_total) ! time entire run
     call t_barrierf('cice_run_total_BARRIER',mpi_comm_ice)
     call t_startf ('cice_run_total')
+!$  call omp_set_num_threads(nthrds)
 
     !--------------------------------
     ! Reset shr logging to my log file
