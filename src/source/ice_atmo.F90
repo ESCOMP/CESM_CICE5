@@ -243,12 +243,13 @@
        ! high frequency coupling follows Roberts et al. (2015)
        if (my_task==master_task.and.firstpass.and.sfctype(1:3)=='ice') then
          if (present(uice) .and. present(vice)) then
+!$OMP MASTER
           write(nu_diag,*)'Using high frequency RASM atmospheric coupling'
+!$OMP END MASTER
          else
           call abort_ice('High frequency RASM coupling missing uice and vice')
          endif
        endif
-
        umin  = p5 ! minumum allowable wind-ice speed difference of 0.5 m/s
 
       else
