@@ -595,11 +595,11 @@ contains
              if ( (diff_lon > 1.e2  .and. abs(diff_lon - 360.) > 1.e-1) .or.&
                   (diff_lon > 1.e-3 .and. diff_lon < c1) ) then
                 write(6,100)n,lonMesh(n),lon(n), diff_lon
-                !call abort_ice ('aborting due to mismatch of mesh lon and input cice lon')
+                call abort_ice ('aborting due to mismatch of mesh lon and input cice lon')
              end if
              if (abs(latMesh(n) - lat(n)) > 1.e-1) then
                 write(6,101)n,latMesh(n),lat(n), abs(latMesh(n)-lat(n))
-                !call abort_ice ('aborting due to mismatch of mesh lat and input cice lat')
+                call abort_ice ('aborting due to mismatch of mesh lat and input cice lat')
              end if
           enddo
        enddo
