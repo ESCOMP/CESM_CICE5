@@ -448,6 +448,7 @@
 
          if (ndim3 == ncat .and. ncat>1) then
             call pio_read_darray(File, vardesc, iodesc3d_ncat, work, status)
+            where (work == PIO_FILL_DOUBLE) work = c0
             if (present(field_loc)) then
                do n=1,ndim3
                   call ice_HaloUpdate (work(:,:,n,:), halo_info, &
@@ -456,6 +457,7 @@
             endif
          elseif (ndim3 == 1) then
             call pio_read_darray(File, vardesc, iodesc2d, work, status)
+            where (work == PIO_FILL_DOUBLE) work = c0
             if (present(field_loc)) then
                call ice_HaloUpdate (work(:,:,1,:), halo_info, &
                                     field_loc, field_type)
