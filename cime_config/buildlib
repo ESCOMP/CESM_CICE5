@@ -26,8 +26,8 @@ def _build_cice():
         driver    = case.get_value("COMP_INTERFACE")
 
         # call buildcpp  to set the cppdefs
-        cmd = os.path.join(os.path.join(srcroot,"components","cice","cime_config","buildcpp"))
-        logger.info("     ... buildlib calling cice buildcpp to set build time options")
+        cmd = os.path.join(os.path.join(srcroot,"components","cice5","cime_config","buildcpp"))
+        logger.info("     ... buildlib calling cice5 buildcpp to set build time options")
         try:
             mod = imp.load_source("buildcpp", cmd)
             cice_cppdefs = mod.buildcpp(case)
@@ -46,14 +46,14 @@ def _build_cice():
         if not os.path.isfile(filepath_file):
             srcroot = case.get_value("SRCROOT")
             caseroot = case.get_value("CASEROOT")
-            paths = [os.path.join(caseroot,"SourceMods","src.cice"),
-                     os.path.join(srcroot,"components","cice","src","io_pio"),
-                     os.path.join(srcroot,"components","cice","src","mpi"),
-                     os.path.join(srcroot,"components","cice","src","source")]
+            paths = [os.path.join(caseroot,"SourceMods","src.cice5"),
+                     os.path.join(srcroot,"components","cice5","src","io_pio"),
+                     os.path.join(srcroot,"components","cice5","src","mpi"),
+                     os.path.join(srcroot,"components","cice5","src","source")]
             if driver == 'nuopc':
-                paths.append(os.path.join(srcroot,"components","cice","src","drivers","nuopc"))
+                paths.append(os.path.join(srcroot,"components","cice5","src","drivers","nuopc"))
             if driver == 'mct':
-                paths.append(os.path.join(srcroot,"components","cice","src","drivers","mct"))
+                paths.append(os.path.join(srcroot,"components","cice5","src","drivers","mct"))
 
             with open(filepath_file, "w") as filepath:
                 filepath.write("\n".join(paths))
@@ -63,7 +63,7 @@ def _build_cice():
         complib = os.path.join(libroot,"libice.a")
         makefile = os.path.join(casetools, "Makefile")
 
-        cmd = "{} complib -j {} MODEL=cice COMPLIB={} -f {} USER_CPPDEFS=\"{}\" {} " \
+        cmd = "{} complib -j {} MODEL=cice5 COMPLIB={} -f {} USER_CPPDEFS=\"{}\" {} " \
             .format(gmake, gmake_j, complib, makefile, cice_cppdefs, get_standard_makefile_args(case))
 
         rc, out, err = run_cmd(cmd, from_dir=bldroot)

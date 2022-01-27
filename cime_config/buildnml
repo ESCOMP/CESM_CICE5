@@ -182,7 +182,7 @@ def buildnml(case, caseroot, compname):
     """Build the cice namelist """
 
     # Build the component namelist
-    if compname != "cice":
+    if compname != "cice5":
         raise AttributeError
 
     srcroot = case.get_value("SRCROOT")
@@ -199,8 +199,8 @@ def buildnml(case, caseroot, compname):
         if not filecmp.cmp(file1, file2):
             call_buildcpp = True
     if call_buildcpp:
-        cmd = os.path.join(os.path.join(srcroot,"components","cice","cime_config","buildcpp"))
-        logger.info("     ...buildnml calling cice buildcpp to set build time options")
+        cmd = os.path.join(os.path.join(srcroot,"components","cice5","cime_config","buildcpp"))
+        logger.info("     ...buildnml calling cice5 buildcpp to set build time options")
         try:
             mod = imp.load_source("buildcpp", cmd)
             mod.buildcpp(case)
@@ -216,12 +216,12 @@ def buildnml(case, caseroot, compname):
     # Construct the namelist generator
     #----------------------------------------------------
     # determine directory for user modified namelist_definitions.xml and namelist_defaults.xml
-    user_xml_dir = os.path.join(caseroot, "SourceMods", "src.cice")
+    user_xml_dir = os.path.join(caseroot, "SourceMods", "src.cice5")
     expect (os.path.isdir(user_xml_dir),
             "user_xml_dir %s does not exist " %user_xml_dir)
 
     # user definition *replaces* existing definition.
-    namelist_xml_dir = os.path.join(srcroot, "components", "cice", "cime_config")
+    namelist_xml_dir = os.path.join(srcroot, "components", "cice5", "cime_config")
     definition_file = [os.path.join(namelist_xml_dir, "namelist_definition_cice.xml")]
     user_definition = os.path.join(user_xml_dir, "namelist_definition_cice.xml")
     if os.path.isfile(user_definition):
@@ -255,7 +255,7 @@ def buildnml(case, caseroot, compname):
             inst_string_label = "\"\""
 
         # create namelist_infile using user_nl_file as input
-        user_nl_file = os.path.join(caseroot, "user_nl_cice" + inst_string)
+        user_nl_file = os.path.join(caseroot, "user_nl_cice5" + inst_string)
         expect(os.path.isfile(user_nl_file),
                "Missing required user_nl_file %s " %(user_nl_file))
         infile = os.path.join(confdir, "namelist_infile")
@@ -279,7 +279,7 @@ def _main_func():
 
     caseroot = parse_input(sys.argv)
     with Case(caseroot) as case:
-        buildnml(case, caseroot, "cice")
+        buildnml(case, caseroot, "cice5")
 
 if __name__ == "__main__":
     _main_func()
