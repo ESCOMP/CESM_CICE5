@@ -1815,7 +1815,8 @@
                                   istop,    jstop)
 
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_iso, &
-                           nt_apnd, nt_hpnd, nt_fbri, tr_brine
+                           nt_apnd, nt_hpnd, nt_fbri, tr_brine, nt_sice
+      use ice_therm_shared, only: ktherm
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1885,7 +1886,7 @@
         indxi       , & ! compressed indices for i/j directions
         indxj
 
-      real (kind=dbl_kind) :: xtmp     ! temporary variable
+      real (kind=dbl_kind) :: xtmp, sicen     ! temporary variable
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -2008,8 +2009,18 @@
             xtmp = (rhoi*vicen(i,j,n)) / dt
             dfresh(i,j) = dfresh(i,j) + xtmp
 
-            xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 / dt
-            dfsalt(i,j) = dfsalt(i,j) + xtmp
+            if (ktherm == 1) then
+               xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 / dt
+               dfsalt(i,j) = dfsalt(i,j) + xtmp
+            elseif (ktherm == 2) then
+               sicen = c0
+               do k=1,nilyr
+                  sicen = sicen + trcrn(i,j,nt_sice+k-1,n) &
+                        / real(nilyr,kind=dbl_kind)
+               enddo
+               xtmp = rhoi*vicen(i,j,n)*sicen*p001 / dt
+               dfsalt(i,j) = dfsalt(i,j) + xtmp
+            endif
 
             aice0(i,j) = aice0(i,j) + aicen(i,j,n)
             aicen(i,j,n) = c0
@@ -2197,9 +2208,20 @@
                  * (aice(i,j)-c1)/aice(i,j) / dt
             dfresh(i,j) = dfresh(i,j) + xtmp
 
-            xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
-                 * (aice(i,j)-c1)/aice(i,j) / dt
-            dfsalt(i,j) = dfsalt(i,j) + xtmp
+            if (ktherm == 1) then
+               xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
+                    * (aice(i,j)-c1)/aice(i,j) / dt
+               dfsalt(i,j) = dfsalt(i,j) + xtmp
+            elseif (ktherm == 2) then
+               sicen = c0
+               do k=1,nilyr
+                  sicen = sicen + trcrn(i,j,nt_sice+k-1,n) &
+                        / real(nilyr,kind=dbl_kind)
+               enddo
+               xtmp = rhoi*vicen(i,j,n)*sicen*p001 &
+                    * (aice(i,j)-c1)/aice(i,j) / dt
+               dfsalt(i,j) = dfsalt(i,j) + xtmp
+            endif
 
             aicen(i,j,n) = aicen(i,j,n) * (c1/aice(i,j))
             vicen(i,j,n) = vicen(i,j,n) * (c1/aice(i,j))

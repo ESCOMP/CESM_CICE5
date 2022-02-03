@@ -1675,6 +1675,7 @@
            hs                , & ! temporary variable for snow depth
            rho_ocn           , & ! temporary variable for ocean density
            rho_ice           , & ! temporary variable for ice/brine density
+           sicen             , & ! temporary variable for salt
            Tice              , & ! temporary variable for ice/brine temperature
            Sbr               , & ! temporary variable for brine salinity
            phi               , & ! temporary variable for ice/brine fraction
@@ -1757,7 +1758,7 @@
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
       !$OMP k,n,qn,ns,hs,rho_ocn,rho_ice,Tice,Sbr,phi,rhob,dfresh,dfsalt,&
-      !$OMP worka,workb,Tinz4d,Sinz4d,Tsnz4d,worka3)
+      !$OMP worka,workb,Tinz4d,Sinz4d,Tsnz4d,worka3,sicen)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -2585,11 +2586,17 @@
                  if (.not. update_ocn_f) then
                  if ( ktherm == 2) then
                     dfresh = -rhoi*(frazil(i,j,iblk)-frazil_diag(i,j,iblk))/dt
+                    sicen = c0
+                    do k = 1, nzilyr
+                       sicen = sicen + trcr(i,j,nt_sice+k-1,iblk)*vice(i,j,iblk) &
+                                     / real(nilyr,kind=dbl_kind)
+                    enddo
+                    dfsalt = sicen*p001*dfresh
                  else
                     dfresh = -rhoi*frazil(i,j,iblk)/dt 
+                    dfsalt = ice_ref_salinity*p001*dfresh
                  endif
                  endif
-                 dfsalt = ice_ref_salinity*p001*dfresh
                  worka(i,j) = aice(i,j,iblk)*(fsalt(i,j,iblk)+dfsalt)
               endif
            enddo
