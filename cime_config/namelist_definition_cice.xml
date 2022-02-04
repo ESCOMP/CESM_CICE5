@@ -1740,6 +1740,7 @@
     </desc>
     <values>
       <value>.false.</value>
+      <value comp_ocn="mom">.true.</value>
     </values>
   </entry>
 

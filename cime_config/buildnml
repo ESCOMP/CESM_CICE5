@@ -50,6 +50,7 @@ def _create_namelists(case, confdir, infile, nmlgen):
     config['hgrid'] = hgrid
     config['cice_mode'] = cice_mode
     config['driver'] = case.get_value("COMP_INTERFACE")
+    config['comp_ocn'] = case.get_value("COMP_OCN")
 
     cice_config_opts = case.get_value('CICE_CONFIG_OPTS')
     if "cice5" in cice_config_opts:
