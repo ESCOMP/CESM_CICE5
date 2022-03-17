@@ -20,7 +20,12 @@ module ice_comp_nuopc
   use shr_orb_mod            , only : shr_orb_decl, shr_orb_params, SHR_ORB_UNDEF_REAL, SHR_ORB_UNDEF_INT
   use shr_cal_mod            , only : shr_cal_noleap, shr_cal_gregorian, shr_cal_ymd2date
   use ice_shr_methods        , only : chkerr, state_setscalar, state_getscalar, state_diagnose, alarmInit
-  use ice_shr_methods        , only : set_component_logging, get_component_instance, state_flddebug
+#ifdef CESMCOUPLED
+  use nuopc_shr_methods      , only : set_component_logging, get_component_instance
+#else
+  use ice_shr_methods        , only : set_component_logging, get_component_instance
+#endif
+  use ice_shr_methods        , only : state_flddebug
   use ice_import_export      , only : ice_import, ice_export, ice_advertise_fields, ice_realize_fields
   use ice_domain_size        , only : nx_global, ny_global
   use ice_communicate        , only : init_communicate, my_task, master_task, mpi_comm_ice
@@ -310,6 +315,33 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) scol_spval
 
+    !----------------------------------------------------------------------------
+    ! generate local mpi comm
+    !----------------------------------------------------------------------------
+
+    call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=my_task, PetCount=npes, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_VMGet(vm, pet=my_task, peCount=nthrds, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if(nthrds==1) then
+       call NUOPC_CompAttributeGet(gcomp, "nthreads", value=cvalue, rc=rc)
+       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
+       read(cvalue,*) nthrds
+    endif
+!$  call omp_set_num_threads(nthrds)
+    !----------------------------------------------------------------------------
+    ! Set cice logging
+    !----------------------------------------------------------------------------
+    ! Note that sets the nu_diag module variable in ice_fileunits
+    ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
+    ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
+
+    call set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     if (scmlon > scol_spval .and. scmlat > scol_spval) then
        call NUOPC_CompAttributeGet(gcomp, name='single_column_lnd_domainfile', &
             value=single_column_lnd_domainfile, rc=rc)
@@ -378,23 +410,6 @@ contains
        single_column = .false.
     end if
 
-    !----------------------------------------------------------------------------
-    ! generate local mpi comm
-    !----------------------------------------------------------------------------
-
-    call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_VMGet(vm, mpiCommunicator=lmpicom, localPet=localPet, PetCount=npes, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call ESMF_VMGet(vm, pet=localPet, peCount=nthrds, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if(nthrds==1) then
-       call NUOPC_CompAttributeGet(gcomp, "nthreads", value=cvalue, rc=rc)
-       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
-       read(cvalue,*) nthrds
-    endif
-!$  call omp_set_num_threads(nthrds)
 
     !----------------------------------------------------------------------------
     ! Initialize cice communicators
@@ -518,16 +533,6 @@ contains
        call abort_ice( subname//'ERROR:: bad calendar for ESMF' )
     end if
 
-    !----------------------------------------------------------------------------
-    ! Set cice logging
-    !----------------------------------------------------------------------------
-    ! Note that sets the nu_diag module variable in ice_fileunits
-    ! nu_diag in this module is initialized to 0 in the module, and if this reset does not
-    ! happen here - then ice_init.F90 will obtain it from the input file ice_modelio.nml
-
-    call set_component_logging(gcomp, my_task==master_task, nu_diag, shrlogunit, rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     call shr_file_setLogUnit (shrlogunit)
 
     !----------------------------------------------------------------------------
@@ -560,7 +565,7 @@ contains
 
        ! Determine the model distgrid using the decomposition obtained in
        ! call to init_grid1 called from cice_init1
-       call ice_mesh_set_distgrid(localpet, npes, ice_distgrid, rc)
+       call ice_mesh_set_distgrid(my_task, npes, ice_distgrid, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        ! Read in the ice mesh on the cice distribution
@@ -635,7 +640,7 @@ contains
     !----------------------------------------------------------------------------
 
     ! Now write output to nu_diag - this must happen AFTER call to cice_init
-    if (localPet == 0) then
+    if (my_task == 0) then
        write(nu_diag,F00) trim(subname),' cice init nextsw_cday = ',nextsw_cday
        write(nu_diag,*) trim(subname),' tfrz_option = ',trim(tfrz_option)
        if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
