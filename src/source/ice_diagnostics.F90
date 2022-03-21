@@ -71,6 +71,8 @@
          totms            , & ! total ice/snow water mass (sh)
          totmin           , & ! total ice water mass (nh)
          totmis           , & ! total ice water mass (sh)
+         totsn            , & ! total salt
+         totss            , & ! total salt
          toten            , & ! total ice/snow energy (J)
          totes                ! total ice/snow energy (J)
 
@@ -142,8 +144,8 @@
       real (kind=dbl_kind) :: &
          umaxn,   hmaxn,   shmaxn,    arean,   snwmxn, extentn, shmaxnt, &
          umaxs,   hmaxs,   shmaxs,    areas,   snwmxs, extents, shmaxst, &
-         etotn,   mtotn,   micen,     msnwn,   pmaxn,  ketotn, &
-         etots,   mtots,   mices,     msnws,   pmaxs,  ketots, &
+         etotn,   mtotn,   micen,     msnwn,   pmaxn,  ketotn,  stotn, &
+         etots,   mtots,   mices,     msnws,   pmaxs,  ketots,  stots, &
          urmsn,   albtotn, arean_alb, mpndn,   ptotn,  spondn, &
          urmss,   albtots, areas_alb, mpnds,   ptots,  sponds 
 
@@ -403,6 +405,14 @@
          etots = global_sum(work1, distrb_info, &
                             field_loc_center, tareas)
 
+         ! total salt volume
+         call total_salt   (work2)
+
+         stotn = global_sum(work2, distrb_info, &
+                            field_loc_center, tarean)
+         stots = global_sum(work2, distrb_info, &
+                            field_loc_center, tareas)
+
       !-----------------------------------------------------------------
       ! various fluxes
       !-----------------------------------------------------------------
@@ -653,13 +663,25 @@
          swerrn = (fswnetn - fswdnn) / (fswnetn - c1)
          swerrs = (fswnets - fswdns) / (fswnets - c1)
 
-         ! salt mass
-         msltn = micen*ice_ref_salinity*p001
-         mslts = mices*ice_ref_salinity*p001
+         if (ktherm == 1) then
 
-         ! change in salt mass
-         delmsltn = delmxn*ice_ref_salinity*p001
-         delmslts = delmxs*ice_ref_salinity*p001
+            ! salt mass
+            msltn = micen*ice_ref_salinity*p001
+            mslts = mices*ice_ref_salinity*p001
+
+            ! change in salt mass
+            delmsltn = delmxn*ice_ref_salinity*p001
+            delmslts = delmxs*ice_ref_salinity*p001
+
+         elseif (ktherm == 2) then
+         
+            ! compute the total salt mass
+            msltn = stotn*rhoi*p001
+            mslts = stots*rhoi*p001
+
+            delmsltn = rhoi*(stotn-totsn)*p001
+            delmslts = rhoi*(stots-totss)*p001
+         endif
 
          ! salt error
          serrn = (sfsaltn + delmsltn) / (msltn + c1)
@@ -1056,7 +1078,7 @@
          shmaxn, snwmxn,  shmaxs, snwmxs, totpn, totps
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         work1
+         work1, work2
 
       ! total ice volume
       shmaxn = global_sum(vice, distrb_info, field_loc_center, tarean)
@@ -1078,6 +1100,11 @@
       call total_energy (work1)
       toten = global_sum(work1, distrb_info, field_loc_center, tarean)
       totes = global_sum(work1, distrb_info, field_loc_center, tareas)
+
+      ! north/south salt
+      call total_salt (work2)
+      totsn = global_sum(work2, distrb_info, field_loc_center, tarean)
+      totss = global_sum(work2, distrb_info, field_loc_center, tareas)
 
       if (print_points) then
          do n = 1, npnt

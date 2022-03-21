@@ -3423,7 +3423,8 @@ contains
           hadded = (dh * phi_snowice) / dt
           wadded = hadded * rhoi
           eadded = hadded * qocn
-          sadded = wadded * ice_ref_salinity * p001
+!         sadded = wadded * ice_ref_salinity * p001
+          sadded = wadded * zSin_snowice * p001
 
           ! conservation
           fadvheat = fadvheat - eadded

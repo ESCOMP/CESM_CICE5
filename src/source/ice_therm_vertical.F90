@@ -204,7 +204,8 @@
 
       real (kind=dbl_kind) :: &
          dhi         , & ! change in ice thickness
-         dhs             ! change in snow thickness
+         dhs         , & ! change in snow thickness
+         dfsalt          ! final salt volume
 
 ! 2D state variables (thickness, temperature, enthalpy)
 
@@ -240,6 +241,9 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fadvocn ! advective heat flux to ocean
+
+      real (kind=dbl_kind), dimension (icells) :: &
+         saltvol ! total salt volume
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -304,10 +308,14 @@
                                   istop,        jstop)
       if (l_stop) return
 
+      saltvol(:) = c0
       do ij = 1, icells
          ! Save initial ice and snow thickness (for fresh and fsalt)
          worki(ij) = hin(ij)
          works(ij) = hsn(ij)
+         do k=1,nilyr
+            saltvol(ij)= saltvol(ij) + rhoi*zSin(ij,k)*hin(ij)*p001/real(nilyr,kind=dbl_kind)
+         enddo
       enddo
 
       !-----------------------------------------------------------------
@@ -504,8 +512,18 @@
          freshn(i,j) = freshn(i,j) + &
                        evapn(i,j) - &
                        (rhoi*dhi + rhos*dhs) / dt
-         fsaltn(i,j) = fsaltn(i,j) - &
-                       rhoi*dhi*ice_ref_salinity*p001/dt
+
+         if (ktherm == 1) then 
+            fsaltn(i,j) = fsaltn(i,j) - &
+                          rhoi*dhi*ice_ref_salinity*p001/dt
+         elseif (ktherm == 2) then
+            dfsalt = c0
+            do k=1,nilyr
+               dfsalt = dfsalt + rhoi*zSin(ij,k)*hin(ij)*p001 &
+                               / real(nilyr,kind=dbl_kind)
+            enddo
+            fsaltn(i,j) = fsaltn(i,j) - (dfsalt - saltvol(ij)) / dt
+         endif
 
          fhocnn(i,j) = fhocnn(i,j) + fadvocn(i,j) ! for ktherm=2 
 

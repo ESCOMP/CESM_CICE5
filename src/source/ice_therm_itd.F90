@@ -1052,7 +1052,8 @@
 
       use ice_state, only: nt_qice, nt_qsno, &
                            nt_aero, tr_aero, nt_iso, tr_iso, &
-                           tr_pond_topo, nt_apnd, nt_hpnd
+                           tr_pond_topo, nt_apnd, nt_hpnd, nt_sice
+      use ice_therm_shared, only: ktherm
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1103,6 +1104,7 @@
          indxi, indxj    ! compressed indices for cells with aice > puny
 
       real (kind=dbl_kind) :: &
+         sicen   , & ! total salt
          dfhocn  , & ! change in fhocn
          dfpond  , & ! change in fpond
          dfresh  , & ! change in fresh
@@ -1144,8 +1146,18 @@
 
             dfresh = (rhos*vsnon(i,j,n) + rhoi*vicen(i,j,n)) &
                    * rside(i,j) / dt
-            dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
-                   * rside(i,j) / dt
+            if (ktherm == 1) then
+                dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
+                       * rside(i,j) / dt
+            elseif (ktherm == 2) then
+                sicen = c0
+                do k=1,nilyr
+                   sicen = sicen + trcrn(i,j,nt_sice+k-1,n) &
+                         / real(nilyr,kind=dbl_kind)
+                enddo
+                dfsalt = rhoi*vicen(i,j,n)*sicen*p001 &
+                       * rside(i,j) / dt
+            endif
             fresh(i,j)      = fresh(i,j)      + dfresh
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
 
@@ -1571,7 +1583,11 @@
 
          if (update_ocn_f) then
             dfresh = -rhoi*vi0new(ij)/dt
-            dfsalt = ice_ref_salinity*p001*dfresh
+            if (ktherm == 1) then
+               dfsalt = ice_ref_salinity*p001*dfresh
+            elseif (ktherm == 2) then
+               dfsalt = Si0new(ij)*p001*dfresh
+            endif
 
             fresh(i,j)      = fresh(i,j)      + dfresh
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
@@ -1581,7 +1597,7 @@
             vi0tmp = fnew*dt / (rhoi*Lfresh)
             frazil_diag(i,j) = frazil(i,j) - vi0tmp
             dfresh = -rhoi*(vi0new(ij)-vi0tmp)/dt
-            dfsalt = ice_ref_salinity*p001*dfresh
+            dfsalt = Si0new(ij)*p001*dfresh
 
             fresh(i,j)      = fresh(i,j)      + dfresh
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
