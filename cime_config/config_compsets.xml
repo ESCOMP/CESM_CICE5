@@ -15,7 +15,7 @@
     TIME = Time period (e.g. 2000, HIST, RCP8...)
     ATM  = [CAM4, CAM5]
     LND  = [CLM40, CLM45, CLM50, SLND]
-    ICE  = [CICE, DICE, SICE]
+    ICE  = [CICE5, DICE, SICE]
     OCN  = [DOCN, ,AQUAP, SOCN]
     ROF  = [RTM, SROF]
     GLC  = [CISM1, CISM2, SGLC]
@@ -39,18 +39,18 @@
   <!-- D compsets -->
 
   <compset>
-    <alias>D</alias>
-    <lname>2000_DATM%NYF_SLND_CICE_DOCN%SOM_DROF%NYF_SGLC_SWAV</lname>
+    <alias>DCICE5</alias>
+    <lname>2000_DATM%NYF_SLND_CICE5_DOCN%SOM_DROF%NYF_SGLC_SWAV</lname>
   </compset>
 
   <compset>
-    <alias>DIAF</alias>
-    <lname>2000_DATM%IAF_SLND_CICE_DOCN%SOM_DROF%IAF_SGLC_SWAV</lname>
+    <alias>DIAFCICE5</alias>
+    <lname>2000_DATM%IAF_SLND_CICE5_DOCN%SOM_DROF%IAF_SGLC_SWAV</lname>
   </compset>
 
   <compset>
-    <alias>DTEST</alias>
-    <lname>2000_DATM%NYF_SLND_CICE_DOCN%SOM_DROF%NYF_SGLC_SWAV_TEST</lname>
+    <alias>DTESTCICE5</alias>
+    <lname>2000_DATM%NYF_SLND_CICE5_DOCN%SOM_DROF%NYF_SGLC_SWAV_TEST</lname>
   </compset>
 
 </compsets>

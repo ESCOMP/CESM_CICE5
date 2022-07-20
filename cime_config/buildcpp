@@ -75,7 +75,7 @@ def buildcpp(case):
         ntasks = case.get_value("NTASKS_PER_INST_ICE")
         srcroot = case.get_value("SRCROOT")
 
-        cmd = os.path.join(srcroot, "components", "cice", "bld", "generate_cice_decomp.pl")
+        cmd = os.path.join(srcroot, "components", "cice5", "bld", "generate_cice_decomp.pl")
         command = "%s -ccsmroot %s -res %s -nx %s -ny %s -nproc %s -thrds %s -output %s "  \
                   % (cmd, srcroot, hgrid, nx, ny, ntasks, nthrds_ice, "all")
         rc, out, err = run_cmd(command)
