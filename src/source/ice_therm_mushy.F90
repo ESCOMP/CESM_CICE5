@@ -272,7 +272,7 @@ contains
     
     real(kind=dbl_kind) :: frac, dTemp, Tmlt, Iswabs_tmp, dt_rhoi_hlyr, ci, dswabs
 
-#ifdef CCSMCOUPLED
+#ifdef CESMCOUPLED
       frac = c1
       dTemp = p01
 #else
