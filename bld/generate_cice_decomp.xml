@@ -126,6 +126,14 @@
     <decompset>slenderX2</decompset>
   </decomp>
 
+  <decomp nproc="512" res="gx1v[34567]" >
+    <maxblocks >1</maxblocks>
+    <bsize_x   >5</bsize_x>
+    <bsize_y   >48</bsize_y>
+    <decomptype>cartesian</decomptype>
+    <decompset>slenderX2</decompset>
+  </decomp>
+
   <decomp nproc="640" res="gx1v[34567]" >
     <maxblocks >2</maxblocks>
     <bsize_x   >1</bsize_x>
